@@ -156,9 +156,51 @@ public:
 } extern clk;
 /* lamport here */
 
+class Counter: public Channel<int>{
+	public:
+		int n;
+		int allowed_n;
+		int nack = 0;
+		Counter(int total, int allowed_nack){
+			n = total;
+			allowed_n = allowed_nack;
+			data = 0;
+		}
+		void reset(){
+			lock();
+			data = 0;
+			nack = 0;
+			unlock();
+		}
+		void incrACK(){
+			lock();
+			data++;
+			signal();
+			unlock();
+		}
+		void incrNACK(){
+			lock();
+			nack++;
+			signal();
+			unlock();
+		}
+		void convert(){
+			lock();
+			nack--;
+			data++;
+			signal();
+			unlock();
+		}
+		void await(){
+			lock();
+			while(data + nack < total) wait();
+			unlock();
+		}
+};
+
 typedef Channel<std::vector<int>> intVec;
 typedef Channel<std::queue<packet_t>> packet_queue;
 
 extern intVec nackVec;
 extern packet_queue waitQueue;
-
+extern Counter cnt;

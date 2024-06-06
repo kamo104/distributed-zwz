@@ -11,6 +11,7 @@ packet_queue waitQueue;
 
 State currentState;
 LamportClock clk;
+Counter cnt;
 
 void mainLoop(){
 }
@@ -38,6 +39,10 @@ int main(int argc, char** argv) {
 
   srand(rank*now_ms);
   clk.data = random()%size+rank;
+
+  // init licznika
+  cnt = Counter(size-1, size/2 - 1);
+
   // dodanie kolejnego bloku bo CommThread w destruktorze czeka na zakończenie pracy wątku
   {
     CommThread commThread;
