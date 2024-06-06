@@ -19,16 +19,15 @@ extern int rank;
 extern int size, guns;
 extern std::vector<int> nackVec;
 extern std::queue<int> waitQueue;
-extern pthread_cond_t newMsgCond;
 /* global variables */
 
 /* logging stuff */
 #ifdef DEBUG
-  #define debug(FORMAT,...) printf("%c[%d;%dm [%d,%d]: " FORMAT "%c[%d;%dm\n",  27, (1+(rank/7))%2, 31+(6+rank)%7, rank, clk.val, ##__VA_ARGS__, 27,0,37);
+  #define debug(FORMAT,...) printf("%c[%d;%dm [%d,%d]: " FORMAT "%c[%d;%dm\n",  27, (1+(rank/7))%2, 31+(6+rank)%7, rank, clk.data, ##__VA_ARGS__, 27,0,37);
 #else
   #define debug(...) ;
 #endif
-#define println(FORMAT,...) printf("%c[%d;%dm [%d,%d]: " FORMAT "%c[%d;%dm\n",  27, (1+(rank/7))%2, 31+(6+rank)%7, rank, clk.val, ##__VA_ARGS__, 27,0,37);
+#define println(FORMAT,...) printf("%c[%d;%dm [%d,%d]: " FORMAT "%c[%d;%dm\n",  27, (1+(rank/7))%2, 31+(6+rank)%7, rank, clk.data, ##__VA_ARGS__, 27,0,37);
 /* logging stuff */
 
 
@@ -128,15 +127,19 @@ public:
 /* state stuff */
 
 /* lamport here */
-class LamportClock{
+class LamportClock : public Channel<int>{
 public:
-  int val = 0;
   int update(int recv_timestamp){
-    return val = std::max(recv_timestamp, val) +1;
+    lock();
+    data = std::max(recv_timestamp, data)+1;
+    unlock();
+    return data;
   }
   LamportClock operator++(int){
+    lock();
     LamportClock tmp = *this;
-    val++;
+    data++;
+    unlock();
     return tmp;
   }
 } extern clk;
