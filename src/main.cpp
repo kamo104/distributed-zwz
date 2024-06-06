@@ -36,7 +36,7 @@ int main(int argc, char** argv) {
   auto now_ms = std::chrono::duration_cast<std::chrono::milliseconds>(now).count();
 
   srand(rank*now_ms);
-  clk.val = random()%size;
+  clk.data = random()%size+rank;
   // dodanie kolejnego bloku bo CommThread w destruktorze czeka na zakończenie pracy wątku
   {
     CommThread commThread;
