@@ -10,6 +10,8 @@ void* CommThread::start(void* ptr){
     currentCycle != cyclesNum-1)
   {
     MPI_Recv(&tmp, 1, MPI_BYTE, MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, &status);
+	// update Lamport Clock
+	clk.update(tmp.timestamp);
     switch(tmp.type){
       case ACK : {
         break;
