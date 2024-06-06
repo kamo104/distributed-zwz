@@ -119,6 +119,9 @@ public:
   bool operator!=(StateType second){
     return data != second;
   }
+  operator StateType() const {
+    return data;
+  }
 
   void changeState(StateType newState){
     lock();
@@ -156,9 +159,9 @@ public:
 } extern clk;
 /* lamport here */
 
-typedef Channel<std::vector<int>> intVec;
+typedef Channel<std::vector<int>> vecInt;
 typedef Channel<std::queue<packet_t>> packet_queue;
 
-extern intVec nackVec;
+extern vecInt nackVec;
 extern packet_queue waitQueue;
 

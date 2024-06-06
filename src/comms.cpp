@@ -12,6 +12,11 @@ void* CommThread::start(void* ptr){
     MPI_Recv(&tmp, 1, MPI_BYTE, MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, &status);
     switch(tmp.type){
       case ACK : {
+        switch(currentState){
+          case(WAIT_ROLE):{
+            break;
+          }
+        }
         break;
       }
       case REQ : {

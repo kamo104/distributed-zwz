@@ -6,7 +6,7 @@
 
 int winAmount = 0, currentCycle = 0;
 int size, rank, guns, cyclesNum;
-intVec nackVec;
+vecInt nackVec;
 packet_queue waitQueue;
 
 State currentState;
@@ -37,7 +37,8 @@ int main(int argc, char** argv) {
   auto now_ms = std::chrono::duration_cast<std::chrono::milliseconds>(now).count();
 
   srand(rank*now_ms);
-  clk.data = random()%size+rank;
+  // clk.data = random()%size+rank;
+  clk.data = rank;
   // dodanie kolejnego bloku bo CommThread w destruktorze czeka na zakończenie pracy wątku
   {
     CommThread commThread;
