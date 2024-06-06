@@ -6,8 +6,9 @@
 
 int winAmount = 0, currentCycle = 0;
 int size, rank, guns, cyclesNum;
-std::vector<int> nackVec;
-std::queue<int> waitQueue;
+intVec nackVec;
+packet_queue waitQueue;
+
 State currentState;
 LamportClock clk;
 

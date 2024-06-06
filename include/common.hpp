@@ -17,8 +17,8 @@ extern int cyclesNum;
 extern int currentCycle;
 extern int rank;
 extern int size, guns;
-extern std::vector<int> nackVec;
-extern std::queue<int> waitQueue;
+// extern std::vector<int> nackVec;
+// extern std::queue<packet_t> waitQueue;
 /* global variables */
 
 /* logging stuff */
@@ -120,6 +120,17 @@ public:
     return data != second;
   }
 
+  void changeState(StateType newState){
+    lock();
+    if(data == FINISHED){
+      unlock();
+      return;
+    }
+    data = newState;
+    unlock();
+    return;
+  }
+
   State(){
     data = INIT;
   }
@@ -144,3 +155,10 @@ public:
   }
 } extern clk;
 /* lamport here */
+
+typedef Channel<std::vector<int>> intVec;
+typedef Channel<std::queue<packet_t>> packet_queue;
+
+extern intVec nackVec;
+extern packet_queue waitQueue;
+
