@@ -3,6 +3,13 @@
 
 packet_t tmp;
 
+int findInVec(int id){
+	for(int i=0;i<nackVec.size();i++){
+		if(nackVec[i] == id) return i;
+	}
+	return -1;
+}
+
 /* communication thread */
 void* CommThread::start(void* ptr){
   MPI_Status status;
@@ -14,16 +21,22 @@ void* CommThread::start(void* ptr){
 	clk.update(tmp.timestamp);
     switch(tmp.type){
       case ACK : {
-        break;
+        cnt.incrACK();
+		break;
       }
       case REQ : {
         break;
       }
       case NACK : {
-        break;
+        cnt.incrNACK();
+		break;
       }
       case RELEASE : {
-        break;
+		if(int i = findInVec(tmp.src)){
+			nackVec.erase(nackVec.begin() + i);
+			cnt.convert();
+		}
+		break;
       }
       case ROLLING : {
         break;
