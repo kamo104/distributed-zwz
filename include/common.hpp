@@ -17,8 +17,6 @@ extern int cyclesNum;
 extern int currentCycle;
 extern int rank;
 extern int size, guns;
-// extern std::vector<int> nackVec;
-// extern std::queue<packet_t> waitQueue;
 /* global variables */
 
 /* logging stuff */
@@ -119,6 +117,9 @@ public:
   bool operator!=(StateType second){
     return data != second;
   }
+  operator StateType() const {
+    return data;
+  }
 
   void changeState(StateType newState){
     lock();
@@ -156,51 +157,54 @@ public:
 } extern clk;
 /* lamport here */
 
-class Counter: public Channel<int>{
-	public:
-		int n;
-		int allowed_n;
-		int nack = 0;
-		Counter(int total, int allowed_nack){
-			n = total;
-			allowed_n = allowed_nack;
-			data = 0;
-		}
-		void reset(){
-			lock();
-			data = 0;
-			nack = 0;
-			unlock();
-		}
-		void incrACK(){
-			lock();
-			data++;
-			signal();
-			unlock();
-		}
-		void incrNACK(){
-			lock();
-			nack++;
-			signal();
-			unlock();
-		}
-		void convert(){
-			lock();
-			nack--;
-			data++;
-			signal();
-			unlock();
-		}
-		void await(){
-			lock();
-			while(data + nack < total) wait();
-			unlock();
-		}
+class Counter: private Channel<int>{
+public:
+  int ack = 0;
+  std::vector<int> nack;
+
+  int total;
+  int allowed_nack;
+  Counter(int n_responses, int nack_threshold){
+    total = n_responses;
+    allowed_nack = nack_threshold;
+  }
+  void reset(){
+    lock();
+    ack = 0;
+    nack.clear();
+    unlock();
+  }
+  void incrACK(){
+    lock();
+    data++;
+    signal();
+    unlock();
+  }
+  void incrNACK(){
+    lock();
+    nack++;
+    signal();
+    unlock();
+  }
+  void convert(int src){
+    lock();
+    auto it = std::find(nack.begin(),nack.end(),src);
+    if(it != nack.end()){
+      nack.erase(it);
+      ack++;
+    }
+
+    signal();
+    unlock();
+  }
+  void await(){
+    lock();
+    while(ack + nack.size() < total) wait();
+    unlock();
+  }
 };
 
-typedef Channel<std::vector<int>> intVec;
 typedef Channel<std::queue<packet_t>> packet_queue;
 
-extern intVec nackVec;
 extern packet_queue waitQueue;
 extern Counter cnt;
