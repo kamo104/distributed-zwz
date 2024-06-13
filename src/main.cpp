@@ -14,16 +14,24 @@ LamportClock clk;
 Counter cnt;
 
 void mainLoop(){
-	//TODO: double check the loop end conditions, I don't think they makes sense
 	while(currentState != FINISHED && currentCycle != cyclesNum-1){
 		switch(currentState){
 			case INIT : {
+				packet_t *pkt = malloc(sizeof(packet_t));
+				//TODO: add outgoing REQ to waitQueue?
+				for(int i=0;i<size;i++)
+					if(i!=rank) sendPacket(pkt, i, REQ);
+				free(pkt);
+				currentState.changeState(WAIT_ROLE);
 				break;
 			}
 			case WAIT_ROLE : {
+				cnt.await();
+				currentState.changeState(ROLE_PICKED);
 				break;
 			}
 			case ROLE_PICKED : {
+				for(int i=0;i<waitQueue;i++)
 				break;
 			}
 			case WAIT_PAIR : {
