@@ -7,7 +7,7 @@
 int winAmount = 0, currentCycle = 0;
 int size, rank, guns, cyclesNum;
 int currPair;
-packet_queue waitQueue;
+PacketChannel waitQueue;
 
 State currentState;
 LamportClock clk;
