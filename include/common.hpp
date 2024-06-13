@@ -167,6 +167,8 @@ public:
 
   int total;
   int allowed_nack;
+
+  Counter(){}
   Counter(int n_responses, int nack_threshold){
     total = n_responses;
     allowed_nack = nack_threshold;
@@ -183,9 +185,9 @@ public:
     signal();
     unlock();
   }
-  void incrNACK(){
+  void incrNACK(int src){
     lock();
-    nack++;
+    nack.push_back(src);
     signal();
     unlock();
   }
@@ -196,7 +198,6 @@ public:
       nack.erase(it);
       ack++;
     }
-
     signal();
     unlock();
   }

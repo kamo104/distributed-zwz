@@ -6,7 +6,7 @@
 
 int winAmount = 0, currentCycle = 0;
 int size, rank, guns, cyclesNum;
-vecInt nackVec;
+int currPair;
 packet_queue waitQueue;
 
 State currentState;
