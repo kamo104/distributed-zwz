@@ -14,6 +14,32 @@ LamportClock clk;
 Counter cnt;
 
 void mainLoop(){
+	//TODO: double check the loop end conditions, I don't think they makes sense
+	while(currentState != FINISHED && currentCycle != cyclesNum-1){
+		switch(currentState){
+			case INIT : {
+				break;
+			}
+			case WAIT_ROLE : {
+				break;
+			}
+			case ROLE_PICKED : {
+				break;
+			}
+			case WAIT_PAIR : {
+				break;
+			}
+			case ROLLING : {
+				break;
+			}
+			case WAIT_END : {
+				break;
+			}
+			case FINISHED : {
+				break;
+			}
+		}
+	}
 }
 
 int main(int argc, char** argv) {
