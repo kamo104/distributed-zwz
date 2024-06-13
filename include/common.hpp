@@ -1,6 +1,5 @@
 #pragma once
 
-#include <functional>
 #include <mpi.h>
 #include <queue>
 #include <stdio.h>
@@ -222,9 +221,11 @@ struct compare{
   }
 };
 
-class PacketChannel : public std::priority_queue<packet_t, std::vector<packet_t>, compare> {
+typedef std::priority_queue<packet_t, std::vector<packet_t>, compare> packet_pq;
+
+class PacketChannel : public packet_pq, public Channel<int>{
 public:
-  using std::priority_queue<packet_t, std::vector<packet_t>, compare>::c; // Expose the container through inheritance
+  using packet_pq::c; // Expose the container through inheritance
 };
 
 extern PacketChannel waitQueue;

@@ -27,6 +27,7 @@ void* CommThread::start(void* ptr){
         break;
       }
       case REQ : {
+        waitQueue.push(tmp);
         // TODO: add to waitQueue?
         if(tmp.timestamp<clk.data 
             && currentState <= ROLLING){
