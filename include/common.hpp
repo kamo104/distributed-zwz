@@ -142,6 +142,12 @@ public:
     return;
   }
 
+  void await(){
+    lock();
+    wait();
+    unlock();
+  }
+
   State(){
     data = INIT;
   }
@@ -167,7 +173,7 @@ public:
 } extern clk;
 /* lamport here */
 
-class Counter: private Channel<int>{
+class Counter: public Channel<int>{
 public:
   int ack = 0;
   std::vector<int> nack;

@@ -1,8 +1,9 @@
 #include <common.hpp>
 #include <comms.hpp>
-#include <pthread.h>
+#include <mpi.h>
 #include <util.hpp>
 #include <chrono>
+#include <ranges>
 
 /* global variables */
 int winAmount = 0, currentCycle = 0;
@@ -15,26 +16,35 @@ LamportClock clk;
 Counter cnt;
 /* global variables */
 
-packet_t tmp;
-
 void mainLoop(){
+	packet_t tmp;
 	//TODO: double check the loop end conditions, I don't think they makes sense
 	while(currentState != FINISHED && currentCycle != cyclesNum-1){
 		switch(currentState){
 			case INIT : {
 			  cnt = Counter(size-1, size/2 - 1);
-				
+			  cnt.lock();
+			  debug("ubiegam się o dostęp do sekcji krytycznej zabójców");
+			  for(int dst : std::ranges::iota_view(0,size)){
+			  	if(dst==rank) continue;
+			  	sendPacket(NULL, dst, REQ);
+			  }
+				debug("przechodzę do stanu WAIT_ROLE");
 			  currentState.changeState(WAIT_ROLE);
+			  cnt.unlock();
 				break;
 			}
 			case WAIT_ROLE : {
 				cnt.await();
+				// TODO: find my 
+				// sendPacket(NULL, waitQueue.vec(), )
 				break;
 			}
 			case ROLE_PICKED : {
 				break;
 			}
 			case WAIT_PAIR : {
+				currentState.await();
 				break;
 			}
 			case ROLLING : {
@@ -66,7 +76,7 @@ int main(int argc, char** argv) {
   
   int provided;
   MPI_Init_thread(&argc, &argv, MPI_THREAD_MULTIPLE, &provided);
-  check_thread_support(provided);
+  // check_thread_support(provided);
 
   MPI_Comm_size(MPI_COMM_WORLD, &size);
   MPI_Comm_rank(MPI_COMM_WORLD, &rank);

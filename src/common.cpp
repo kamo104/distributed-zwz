@@ -1,7 +1,7 @@
 #include <common.hpp>
 
 /* packet stuff */
-void sendPacket(packet_t *pkt, int destination, PacketType tag){
+void sendPacket(packet_t *pkt, int destination, PacketType tag, bool increment=true){
   int freepkt=0;
   if (pkt==0) { pkt = (packet_t*)malloc(sizeof(packet_t)); freepkt=1;}
   pkt->type = tag;
@@ -9,7 +9,7 @@ void sendPacket(packet_t *pkt, int destination, PacketType tag){
   pkt->dst = destination;
   pkt->timestamp = clk.data;
 
-  clk++;
+  if(increment) clk++;
 
   MPI_Send(&pkt,sizeof(packet_t),MPI_BYTE,destination,tag, MPI_COMM_WORLD);
 

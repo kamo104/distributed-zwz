@@ -1,10 +1,9 @@
 #include <common.hpp>
 #include <comms.hpp>
 
-packet_t tmp;
-
 /* communication thread */
 void* CommThread::start(void* ptr){
+  packet_t tmp;
   MPI_Status status;
   while(currentState != FINISHED && 
     currentCycle != cyclesNum-1)
@@ -14,12 +13,14 @@ void* CommThread::start(void* ptr){
   	clk.update(tmp.timestamp);
     switch(tmp.type){
       case ACK : {
+        debug("otrzymałem ACK");
         switch(currentState){
-          case WAIT_ROLE : case WAIT_GUN : {
+          case INIT : case WAIT_ROLE : case WAIT_GUN : {
             cnt.incrACK();
             break;
           }
           case WAIT_PAIR : {
+            debug("przechodzę do stanu WAIT_GUN");
             currentState.changeState(WAIT_GUN);
             break;
           }
@@ -42,33 +43,43 @@ void* CommThread::start(void* ptr){
         break;
       }
       case NACK : {
+        debug("otrzymałem NACK");
         cnt.incrNACK(tmp.src);
 		    break;
       }
       case RELEASE : {
+        debug("otrzymałem RELEASE");
         cnt.convert(tmp.src);
 		    break;
       }
       case ROLL : {
+        debug("otrzymałem ROLL");
         break;
       }
       case END : {
+        debug("otrzymałem END");
         currentState.lock();
         if(currentState >= WAIT_END){
           // send END to next in the ring
+          debug("przesyłam END dalej");
           sendPacket(&tmp,(rank+1)%size, END);
           currentState.unlock();
           break;
         }
+        debug("odpowiadam NACK z powodu stanu");
         sendPacket(&tmp, tmp.value, NACK);
         currentState.unlock();
         break;
       }
-      case GUN:
-        break;
-      case PAIR:
+      case GUN: {
+        debug("otrzymałem GUN");
         break;
       }
+      case PAIR: {
+        debug("otrzymałem PAIR");
+        break;
+      }
+    }
   }
   pthread_exit(NULL);
 }

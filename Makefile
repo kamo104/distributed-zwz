@@ -7,7 +7,7 @@ FLAGS=-DDEBUG -g
 all: main
 
 main: $(SOURCES) $(HEADERS)
-	mpicxx -I$(HEADERS) $(SOURCES) $(FLAGS) -o main
+	mpicxx -std=c++20 -I$(HEADERS) $(SOURCES) $(FLAGS) -o main
 
 clear: clean
 
