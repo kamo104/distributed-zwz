@@ -11,8 +11,35 @@ packet_queue waitQueue;
 
 State currentState;
 LamportClock clk;
+Counter cnt;
 
 void mainLoop(){
+	//TODO: double check the loop end conditions, I don't think they makes sense
+	while(currentState != FINISHED && currentCycle != cyclesNum-1){
+		switch(currentState){
+			case INIT : {
+				break;
+			}
+			case WAIT_ROLE : {
+				break;
+			}
+			case ROLE_PICKED : {
+				break;
+			}
+			case WAIT_PAIR : {
+				break;
+			}
+			case ROLLING : {
+				break;
+			}
+			case WAIT_END : {
+				break;
+			}
+			case FINISHED : {
+				break;
+			}
+		}
+	}
 }
 
 int main(int argc, char** argv) {
@@ -37,8 +64,13 @@ int main(int argc, char** argv) {
   auto now_ms = std::chrono::duration_cast<std::chrono::milliseconds>(now).count();
 
   srand(rank*now_ms);
+
+  // init licznika
+  cnt = Counter(size-1, size/2 - 1);
+
   // clk.data = random()%size+rank;
   clk.data = rank;
+  
   // dodanie kolejnego bloku bo CommThread w destruktorze czeka na zakończenie pracy wątku
   {
     CommThread commThread;

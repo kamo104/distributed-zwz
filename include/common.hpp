@@ -18,7 +18,6 @@ extern int cyclesNum;
 extern int currentCycle;
 extern int rank;
 extern int size, guns;
-extern int ackNum;
 extern int currPair;
 /* global variables */
 
@@ -161,9 +160,54 @@ public:
 } extern clk;
 /* lamport here */
 
-typedef Channel<std::vector<int>> vecInt;
+class Counter: private Channel<int>{
+public:
+  int ack = 0;
+  std::vector<int> nack;
+
+  int total;
+  int allowed_nack;
+  Counter(int n_responses, int nack_threshold){
+    total = n_responses;
+    allowed_nack = nack_threshold;
+  }
+  void reset(){
+    lock();
+    ack = 0;
+    nack.clear();
+    unlock();
+  }
+  void incrACK(){
+    lock();
+    data++;
+    signal();
+    unlock();
+  }
+  void incrNACK(){
+    lock();
+    nack++;
+    signal();
+    unlock();
+  }
+  void convert(int src){
+    lock();
+    auto it = std::find(nack.begin(),nack.end(),src);
+    if(it != nack.end()){
+      nack.erase(it);
+      ack++;
+    }
+
+    signal();
+    unlock();
+  }
+  void await(){
+    lock();
+    while(ack + nack.size() < total) wait();
+    unlock();
+  }
+};
+
 typedef Channel<std::queue<packet_t>> packet_queue;
 
-extern vecInt nackVec;
 extern packet_queue waitQueue;
-
+extern Counter cnt;
