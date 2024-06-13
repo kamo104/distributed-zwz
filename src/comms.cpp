@@ -14,24 +14,55 @@ void* CommThread::start(void* ptr){
 	clk.update(tmp.timestamp);
     switch(tmp.type){
       case ACK : {
-        cnt.incrACK();
-		    break;
+        switch(currentState){
+          case(WAIT_ROLE):{
+            cnt.incrACK();
+            break;
+          }
+          case(WAIT_PAIR):{
+            // pair has been accepted
+            currPair = tmp.src;
+            // TODO: rethink, 
+            // maybe there should be a state of gun acquisition
+            currentState.changeState(ROLLING);
+            break;
+          }
+        }
+        break;
       }
       case REQ : {
+        // TODO: add to waitQueue?
+        if(tmp.timestamp<clk.data 
+            && currentState <= ROLLING){
+          // send nack
+          sendPacket(&tmp, tmp.src, NACK);
+          break;
+        }
+        // send ack
+        sendPacket(&tmp,tmp.src,ACK);
         break;
       }
       case NACK : {
-        cnt.incrNACK();
+        cnt.incrNACK(tmp.src);
 		    break;
       }
       case RELEASE : {
         cnt.convert(tmp.src);
 		    break;
       }
-      case ROLLING : {
+      case ROLL : {
         break;
       }
       case END : {
+        currentState.lock();
+        if(currentState >= WAIT_END){
+          // send END to next in the ring
+          sendPacket(&tmp,(rank+1)%size,END);
+          currentState.unlock();
+          break;
+        }
+        sendPacket(&tmp, tmp.value, NACK);
+        currentState.unlock();
         break;
       }
     }

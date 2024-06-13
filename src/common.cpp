@@ -7,8 +7,10 @@ void sendPacket(packet_t *pkt, int destination, PacketType tag){
   pkt->type = tag;
   pkt->src = rank;
   pkt->dst = destination;
+  pkt->timestamp = clk.data;
 
   clk++;
+
   MPI_Send(&pkt,sizeof(packet_t),MPI_BYTE,destination,tag, MPI_COMM_WORLD);
 
   // debug("Wysyłam %s do %d\n", tag2string( tag), destination);

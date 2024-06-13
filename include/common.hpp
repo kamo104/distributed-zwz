@@ -9,6 +9,7 @@
 #include <string.h>
 #include <pthread.h>
 #include <vector>
+#include <algorithm>
 
 
 /* global variables */
@@ -17,6 +18,7 @@ extern int cyclesNum;
 extern int currentCycle;
 extern int rank;
 extern int size, guns;
+extern int currPair;
 /* global variables */
 
 /* logging stuff */
@@ -71,7 +73,7 @@ enum PacketType : int{
   ACK,
   NACK,
   RELEASE,
-  ROLLING, // imo rolling powinien być typem pakietu a nie stanem skoro wysyłamy go drugiemu procesowi
+  ROLL, // imo rolling powinien być typem pakietu a nie stanem skoro wysyłamy go drugiemu procesowi
   END, // dodałem typ end który oznacza token w pakiecie
 };
 
@@ -98,7 +100,7 @@ enum StateType : int {
   WAIT_ROLE,
   ROLE_PICKED,
   WAIT_PAIR,
-  // ROLLING,
+  ROLLING,
   WAIT_END,
   FINISHED,
 };
@@ -128,6 +130,7 @@ public:
       return;
     }
     data = newState;
+    signal();
     unlock();
     return;
   }
