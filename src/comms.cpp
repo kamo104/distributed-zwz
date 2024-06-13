@@ -10,21 +10,17 @@ void* CommThread::start(void* ptr){
     currentCycle != cyclesNum-1)
   {
     MPI_Recv(&tmp, 1, MPI_BYTE, MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, &status);
-	// update Lamport Clock
-	clk.update(tmp.timestamp);
+  	// update Lamport Clock
+  	clk.update(tmp.timestamp);
     switch(tmp.type){
       case ACK : {
         switch(currentState){
-          case(WAIT_ROLE):{
+          case WAIT_ROLE : case WAIT_GUN :{
             cnt.incrACK();
             break;
           }
-          case(WAIT_PAIR):{
-            // pair has been accepted
-            currPair = tmp.src;
-            // TODO: rethink, 
-            // maybe there should be a state of gun acquisition
-            currentState.changeState(ROLLING);
+          case WAIT_PAIR :{
+            currentState.changeState(WAIT_GUN);
             break;
           }
         }
@@ -57,7 +53,7 @@ void* CommThread::start(void* ptr){
         currentState.lock();
         if(currentState >= WAIT_END){
           // send END to next in the ring
-          sendPacket(&tmp,(rank+1)%size,END);
+          sendPacket(&tmp,(rank+1)%size, END);
           currentState.unlock();
           break;
         }
@@ -65,7 +61,13 @@ void* CommThread::start(void* ptr){
         currentState.unlock();
         break;
       }
-    }
+      case GUN:
+        
+
+        break;
+      case PAIR:
+        break;
+      }
   }
   pthread_exit(NULL);
 }

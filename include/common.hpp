@@ -1,5 +1,6 @@
 #pragma once
 
+#include <functional>
 #include <mpi.h>
 #include <queue>
 #include <stdio.h>
@@ -60,6 +61,10 @@ public:
     pthread_mutex_init(&mut, NULL);
     pthread_cond_init(&wc, NULL);
   }
+  Channel(T init_val){
+    Channel();
+    data = init_val;
+  }
   ~Channel(){
     pthread_mutex_destroy(&mut);
     pthread_cond_destroy(&wc);
@@ -73,8 +78,10 @@ enum PacketType : int{
   ACK,
   NACK,
   RELEASE,
-  ROLL, // imo rolling powinien być typem pakietu a nie stanem skoro wysyłamy go drugiemu procesowi
-  END, // dodałem typ end który oznacza token w pakiecie
+  PAIR,
+  GUN,
+  ROLL,
+  END,
 };
 
 struct packet_t {
@@ -100,6 +107,7 @@ enum StateType : int {
   WAIT_ROLE,
   ROLE_PICKED,
   WAIT_PAIR,
+  WAIT_GUN,
   ROLLING,
   WAIT_END,
   FINISHED,
@@ -208,7 +216,17 @@ public:
   }
 };
 
-typedef Channel<std::queue<packet_t>> packet_queue;
+struct compare{
+  bool operator()(packet_t a, packet_t b){
+    return a.timestamp < b.timestamp;
+  }
+};
 
-extern packet_queue waitQueue;
+class PacketChannel : public std::priority_queue<packet_t, std::vector<packet_t>, compare> {
+public:
+  using std::priority_queue<packet_t, std::vector<packet_t>, compare>::c; // Expose the container through inheritance
+};
+
+extern PacketChannel waitQueue;
+
 extern Counter cnt;
