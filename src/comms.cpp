@@ -15,11 +15,11 @@ void* CommThread::start(void* ptr){
     switch(tmp.type){
       case ACK : {
         switch(currentState){
-          case WAIT_ROLE : case WAIT_GUN :{
+          case WAIT_ROLE : case WAIT_GUN : {
             cnt.incrACK();
             break;
           }
-          case WAIT_PAIR :{
+          case WAIT_PAIR : {
             currentState.changeState(WAIT_GUN);
             break;
           }
@@ -27,15 +27,17 @@ void* CommThread::start(void* ptr){
         break;
       }
       case REQ : {
+        debug("dostałem REQ");
         waitQueue.push(tmp);
-        // TODO: add to waitQueue?
         if(tmp.timestamp<clk.data 
             && currentState <= ROLLING){
           // send nack
+          debug("odsyłam NACK");
           sendPacket(&tmp, tmp.src, NACK);
           break;
         }
         // send ack
+        debug("odsyłam ACK");
         sendPacket(&tmp,tmp.src,ACK);
         break;
       }
@@ -63,8 +65,6 @@ void* CommThread::start(void* ptr){
         break;
       }
       case GUN:
-        
-
         break;
       case PAIR:
         break;

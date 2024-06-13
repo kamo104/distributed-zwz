@@ -4,6 +4,7 @@
 #include <util.hpp>
 #include <chrono>
 
+/* global variables */
 int winAmount = 0, currentCycle = 0;
 int size, rank, guns, cyclesNum;
 int currPair;
@@ -12,15 +13,22 @@ PacketChannel waitQueue;
 State currentState;
 LamportClock clk;
 Counter cnt;
+/* global variables */
+
+packet_t tmp;
 
 void mainLoop(){
 	//TODO: double check the loop end conditions, I don't think they makes sense
 	while(currentState != FINISHED && currentCycle != cyclesNum-1){
 		switch(currentState){
 			case INIT : {
+			  cnt = Counter(size-1, size/2 - 1);
+				
+			  currentState.changeState(WAIT_ROLE);
 				break;
 			}
 			case WAIT_ROLE : {
+				cnt.await();
 				break;
 			}
 			case ROLE_PICKED : {
@@ -38,8 +46,11 @@ void mainLoop(){
 			case FINISHED : {
 				break;
 			}
-		}
-	}
+      case WAIT_GUN: {
+    		break;
+    	}
+    }
+  }
 }
 
 int main(int argc, char** argv) {
@@ -66,7 +77,7 @@ int main(int argc, char** argv) {
   srand(rank*now_ms);
 
   // init licznika
-  cnt = Counter(size-1, size/2 - 1);
+  // cnt = Counter(size-1, size/2 - 1);
 
   // clk.data = random()%size+rank;
   clk.data = rank;

@@ -223,9 +223,31 @@ struct compare{
 
 typedef std::priority_queue<packet_t, std::vector<packet_t>, compare> packet_pq;
 
-class PacketChannel : public packet_pq, public Channel<int>{
+class PacketChannel : packet_pq, public Channel<int>{
 public:
-  using packet_pq::c; // Expose the container through inheritance
+  std::vector<packet_t>& vec(){
+    return packet_pq::c;
+  }
+  void push(packet_t pkt){
+    lock();
+    packet_pq::push(pkt);
+    signal();
+    unlock();
+  }
+  void pop(){
+    lock();
+    packet_pq::pop();
+    signal();
+    unlock();
+  }
+  void clear(){
+    lock();
+    while(!packet_pq::empty()){
+      packet_pq::pop();
+    }
+    signal();
+    unlock();
+  }
 };
 
 extern PacketChannel waitQueue;
