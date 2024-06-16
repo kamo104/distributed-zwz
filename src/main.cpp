@@ -1,5 +1,6 @@
 #include <common.hpp>
 #include <comms.hpp>
+#include <cstdlib>
 #include <mpi.h>
 #include <util.hpp>
 #include <chrono>
@@ -18,36 +19,63 @@ Counter cnt;
 
 void mainLoop(){
 	packet_t tmp;
-	//TODO: double check the loop end conditions, I don't think they makes sense
+	int my_id;
+	int pair_id;
 	while(currentState != FINISHED && currentCycle != cyclesNum-1){
 		switch(currentState){
 			case INIT : {
 			  cnt = Counter(size-1, size/2 - 1);
 			  cnt.lock();
+				// debug("przechodzę do stanu WAIT_ROLE");
+			  currentState.changeState(WAIT_ROLE);
 			  debug("ubiegam się o dostęp do sekcji krytycznej zabójców");
 			  for(int dst : std::ranges::iota_view(0,size)){
 			  	if(dst==rank) continue;
-			  	sendPacket(NULL, dst, REQ);
+			  	sendPacket(&tmp, dst, REQ, false);
 			  }
-				debug("przechodzę do stanu WAIT_ROLE");
-			  currentState.changeState(WAIT_ROLE);
+			  waitQueue.push(tmp);
+			  clk++;
 			  cnt.unlock();
 				break;
 			}
 			case WAIT_ROLE : {
 				cnt.await();
-				// TODO: find my 
-				// sendPacket(NULL, waitQueue.vec(), )
+
+				currentState.lock();
+
+				for(int i=0;i<waitQueue.vec().size();i++){
+					if(waitQueue.vec()[i].src!=rank)continue;
+					my_id = i;
+				}
+				int size2 =waitQueue.vec().size()/2;
+				pair_id = size2 > my_id ? size2+my_id : my_id-size2;
+
+				currPair = waitQueue.vec()[pair_id].src;
+
+				
+				// if I'm the killer send a pair req and set cnt to killer mode
+				if(my_id<pair_id){
+					debug("wysyłam PAIR REQ");
+					sendPacket(NULL, currPair, PAIR);
+					cnt = Counter(size/2-1,guns);
+				}
+				currentState.changeState(WAIT_PAIR);
 				break;
 			}
-			case ROLE_PICKED : {
-				break;
-			}
+			// case ROLE_PICKED : {
+			// 	break;
+			// }
 			case WAIT_PAIR : {
 				currentState.await();
+				// send gun requests if I'm a killer
+				// for(const packet_t& pkt:waitQueue.vec().){
+					
+				// }
 				break;
 			}
 			case ROLLING : {
+				tmp.value = random()%INT32_MAX;
+				sendPacket(&tmp, currPair, ROLL);
 				break;
 			}
 			case WAIT_END : {
@@ -57,6 +85,8 @@ void mainLoop(){
 				break;
 			}
       case WAIT_GUN: {
+      	cnt.await();
+      	currentState.changeState(ROLLING);
     		break;
     	}
     }

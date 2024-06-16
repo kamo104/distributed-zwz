@@ -97,7 +97,7 @@ struct packet_t {
   int value;
 };
 
-void sendPacket(packet_t *pkt, int destination, PacketType tag);
+void sendPacket(packet_t *pkt, int destination, PacketType tag, bool increment=true);
 /* packet stuff */
 
 /* state stuff */

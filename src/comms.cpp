@@ -14,7 +14,7 @@ void* CommThread::start(void* ptr){
     switch(tmp.type){
       case ACK : {
         debug("otrzymałem ACK");
-        switch(currentState){
+        switch(currentState.lock();currentState){
           case INIT : case WAIT_ROLE : case WAIT_GUN : {
             cnt.incrACK();
             break;
@@ -25,6 +25,7 @@ void* CommThread::start(void* ptr){
             break;
           }
         }
+        currentState.unlock();
         break;
       }
       case REQ : {
@@ -77,6 +78,8 @@ void* CommThread::start(void* ptr){
       }
       case PAIR: {
         debug("otrzymałem PAIR");
+        sendPacket(NULL, tmp.src, ACK);
+        currentState.changeState(ROLLING);
         break;
       }
     }

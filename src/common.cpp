@@ -1,7 +1,7 @@
 #include <common.hpp>
 
 /* packet stuff */
-void sendPacket(packet_t *pkt, int destination, PacketType tag, bool increment=true){
+void sendPacket(packet_t *pkt, int destination, PacketType tag, bool increment){
   int freepkt=0;
   if (pkt==0) { pkt = (packet_t*)malloc(sizeof(packet_t)); freepkt=1;}
   pkt->type = tag;
