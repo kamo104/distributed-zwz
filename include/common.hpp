@@ -219,6 +219,11 @@ public:
     while(ack + nack.size() < total) wait();
     unlock();
   }
+  void await_entry(){
+	lock();
+	while(ack + nack.size() < total || nack.size() > nack_threshold) wait();
+	unlock();
+  }
 };
 
 struct compare{
