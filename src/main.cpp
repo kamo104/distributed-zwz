@@ -41,6 +41,7 @@ void mainLoop(){
 			case WAIT_ROLE : {
 				cnt.await();
 
+				// TODO: check/remove possibly erroneus mutex lock
 				currentState.lock();
 
 				for(int i=0;i<waitQueue.vec().size();i++){
@@ -54,10 +55,11 @@ void mainLoop(){
 
 				
 				// if I'm the killer send a pair req and set cnt to killer mode
+				// TODO: double check if this has a possibility of firing off before other processes get their counter swapped
 				if(my_id<pair_id){
+					cnt = Counter(size/2-1,guns);
 					debug("wysyłam PAIR REQ");
 					sendPacket(NULL, currPair, PAIR);
-					cnt = Counter(size/2-1,guns);
 				}
 				currentState.changeState(WAIT_PAIR);
 				break;
@@ -84,11 +86,11 @@ void mainLoop(){
 			case FINISHED : {
 				break;
 			}
-      case WAIT_GUN: {
-      	cnt.await();
-      	currentState.changeState(ROLLING);
-    		break;
-    	}
+			case WAIT_GUN: {
+				cnt.await_entry(); // wait until critical section entry
+				currentState.changeState(ROLLING);
+				break;
+			}
     }
   }
 }
