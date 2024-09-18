@@ -10,6 +10,7 @@
 int winAmount = 0, currentCycle = 0;
 int size, rank, guns, cyclesNum;
 int currPair;
+int rollVal = -1;
 PacketChannel waitQueue;
 
 State currentState;
@@ -76,8 +77,12 @@ void mainLoop(){
 				break;
 			}
 			case ROLLING : {
-				tmp.value = random()%INT32_MAX;
+				debug("rzut kością")
+				rollVal = random()%INT32_MAX;
+				tmp.value = rollVal;
 				sendPacket(&tmp, currPair, ROLL);
+				// TODO: implement the result comparison, score increment,
+				// and RELEASE msg
 				break;
 			}
 			case WAIT_END : {

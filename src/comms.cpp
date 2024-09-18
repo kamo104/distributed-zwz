@@ -55,6 +55,13 @@ void* CommThread::start(void* ptr){
       }
       case ROLL : {
         debug("otrzymałem ROLL");
+		int pairRollVal = tmp.value;
+		if(rollVal == -1){
+			rollVal = random()%INT32_MAX;
+			tmp.value = rollVal;
+			sendPacket(&tmp, currPair, ROLL);
+		}
+		if(rollVal < pairRollVal) winAmount++;
         break;
       }
       case END : {
