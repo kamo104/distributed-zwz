@@ -62,6 +62,7 @@ void* CommThread::start(void* ptr){
 			sendPacket(&tmp, currPair, ROLL);
 		}
 		if(rollVal < pairRollVal) winAmount++;
+		//TODO: send RELEASEs to free gun if killer
         break;
       }
       case END : {

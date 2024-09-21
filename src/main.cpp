@@ -81,8 +81,6 @@ void mainLoop(){
 				rollVal = random()%INT32_MAX;
 				tmp.value = rollVal;
 				sendPacket(&tmp, currPair, ROLL);
-				// TODO: implement the result comparison, score increment,
-				// and RELEASE msg
 				break;
 			}
 			case WAIT_END : {
