@@ -1,6 +1,8 @@
 #include <common.hpp>
 #include <comms.hpp>
 
+#include <cstdint>
+
 /* communication thread */
 void* CommThread::start(void* ptr){
   packet_t tmp;
@@ -14,7 +16,8 @@ void* CommThread::start(void* ptr){
     switch(tmp.type){
       case ACK : {
         debug("otrzymałem ACK");
-        switch(currentState.lock();currentState){
+        currentState.lock();
+        switch(currentState){
           case INIT : case WAIT_ROLE : case WAIT_GUN : {
             cnt.incrACK();
             break;
@@ -22,6 +25,10 @@ void* CommThread::start(void* ptr){
           case WAIT_PAIR : {
             debug("przechodzę do stanu WAIT_GUN");
             currentState.changeState(WAIT_GUN);
+            break;
+          }
+          default : {
+            debug("jestem w stanie innym niż {INIT, WAIT_ROLE, WAIT_GUN, WAIT_PAIR}, a otrzymałem ACK, WTF");
             break;
           }
         }
@@ -55,14 +62,14 @@ void* CommThread::start(void* ptr){
       }
       case ROLL : {
         debug("otrzymałem ROLL");
-		int pairRollVal = tmp.value;
-		if(rollVal == -1){
-			rollVal = random()%INT32_MAX;
-			tmp.value = rollVal;
-			sendPacket(&tmp, currPair, ROLL);
-		}
-		if(rollVal < pairRollVal) winAmount++;
-		//TODO: send RELEASEs to free gun if killer
+    		int pairRollVal = tmp.value;
+    		if(rollVal == -1){
+    			rollVal = random()%INT32_MAX;
+    			tmp.value = rollVal;
+    			sendPacket(&tmp, currPair, ROLL);
+    		}
+    		if(rollVal < pairRollVal) winAmount++;
+    		// TODO: send RELEASEs to free gun if killer
         break;
       }
       case END : {

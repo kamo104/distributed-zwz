@@ -19,6 +19,7 @@ extern int currentCycle;
 extern int rank;
 extern int size, guns;
 extern int currPair;
+extern int rollVal;
 /* global variables */
 
 /* logging stuff */
@@ -37,6 +38,7 @@ class Channel{
 private:
   pthread_mutex_t mut;
   pthread_cond_t wc;
+  pthread_mutexattr_t attr;
 public:
   T data;
 
@@ -57,7 +59,10 @@ public:
   }
   
   Channel(){
-    pthread_mutex_init(&mut, NULL);
+    pthread_mutexattr_init(&attr);
+    pthread_mutexattr_settype(&attr, PTHREAD_MUTEX_RECURSIVE);
+    
+    pthread_mutex_init(&mut, &attr);
     pthread_cond_init(&wc, NULL);
   }
   Channel(T init_val){
@@ -67,6 +72,7 @@ public:
   ~Channel(){
     pthread_mutex_destroy(&mut);
     pthread_cond_destroy(&wc);
+    pthread_mutexattr_destroy(&attr);
   }
 };
 /* channel stuff */
@@ -221,7 +227,7 @@ public:
   }
   void await_entry(){
 	lock();
-	while(ack + nack.size() < total || nack.size() > nack_threshold) wait();
+	while(ack + nack.size() < total || nack.size() > allowed_nack) wait();
 	unlock();
   }
 };

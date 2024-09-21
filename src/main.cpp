@@ -54,7 +54,6 @@ void mainLoop(){
 
 				currPair = waitQueue.vec()[pair_id].src;
 
-				
 				// if I'm the killer send a pair req and set cnt to killer mode
 				// TODO: double check if this has a possibility of firing off before other processes get their counter swapped
 				if(my_id<pair_id){
@@ -63,6 +62,7 @@ void mainLoop(){
 					sendPacket(NULL, currPair, PAIR);
 				}
 				currentState.changeState(WAIT_PAIR);
+				currentState.unlock();
 				break;
 			}
 			// case ROLE_PICKED : {
@@ -72,7 +72,6 @@ void mainLoop(){
 				currentState.await();
 				// send gun requests if I'm a killer
 				// for(const packet_t& pkt:waitQueue.vec().){
-					
 				// }
 				break;
 			}
@@ -87,11 +86,18 @@ void mainLoop(){
 				break;
 			}
 			case FINISHED : {
+				currentCycle += 1;
+				if (++currentCycle == cyclesNum){
+					return;
+				}
+				currentState.changeState(INIT);
 				break;
 			}
 			case WAIT_GUN: {
 				cnt.await_entry(); // wait until critical section entry
 				currentState.changeState(ROLLING);
+				// TODO: give back the gun right away to the first nack we sent/noone
+				// sendPacket(tmp, , )
 				break;
 			}
     }
