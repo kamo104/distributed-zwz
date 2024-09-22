@@ -2,6 +2,7 @@
 
 #include <mpi.h>
 #include <queue>
+#include <stdexcept>
 #include <stdio.h>
 #include <stdlib.h>
 #include <stddef.h>
@@ -10,7 +11,14 @@
 #include <pthread.h>
 #include <vector>
 #include <algorithm>
+#include <string>
+#include <sstream>
 
+
+class PacketChannel;
+class State;
+class Counter;
+class LamportClock;
 
 /* global variables */
 extern int winAmount;
@@ -20,17 +28,12 @@ extern int rank;
 extern int size, guns;
 extern int currPair;
 extern int rollVal;
+
+extern State currentState;
+extern LamportClock clk;
+extern PacketChannel waitQueue;
+extern Counter roleCounter, gunCounter;
 /* global variables */
-
-/* logging stuff */
-#ifdef DEBUG
-  #define debug(FORMAT,...) printf("%c[%d;%dm [%d,%d]: " FORMAT "%c[%d;%dm\n",  27, (1+(rank/7))%2, 31+(6+rank)%7, rank, clk.data, ##__VA_ARGS__, 27,0,37);
-#else
-  #define debug(...) ;
-#endif
-#define println(FORMAT,...) printf("%c[%d;%dm [%d,%d]: " FORMAT "%c[%d;%dm\n",  27, (1+(rank/7))%2, 31+(6+rank)%7, rank, clk.data, ##__VA_ARGS__, 27,0,37);
-/* logging stuff */
-
 
 /* channel stuff */
 template<class T>
@@ -89,6 +92,9 @@ enum PacketType : int{
   END,
 };
 
+std::string toString(PacketType pkt);
+
+#pragma pack(push,1)
 struct packet_t {
   // type jest nadmiarowe jeśli nie będziemy przesyłać pakietów między wątkami
   PacketType type;
@@ -102,9 +108,40 @@ struct packet_t {
   // używane w tokenie i rolling
   int value;
 };
+#pragma pack(pop)
+
+std::string packetDump(const packet_t &pkt);
 
 void sendPacket(packet_t *pkt, int destination, PacketType tag, bool increment=true);
 /* packet stuff */
+
+/* lamport here */
+class LamportClock : public Channel<int>{
+public:
+  int update(int recv_timestamp){
+    lock();
+    data = std::max(recv_timestamp, data)+1;
+    unlock();
+    return data;
+  }
+  LamportClock operator++(int){
+    lock();
+    LamportClock tmp = *this;
+    data++;
+    unlock();
+    return tmp;
+  }
+};
+/* lamport here */
+
+/* logging stuff */
+#ifdef DEBUG
+  #define debug(FORMAT,...) printf("%c[%d;%dm [%d,%d]: " FORMAT "%c[%d;%dm\n",  27, (1+(rank/7))%2, 31+(6+rank)%7, rank, clk.data, ##__VA_ARGS__, 27,0,37);
+#else
+  #define debug(...) ;
+#endif
+#define println(FORMAT,...) printf("%c[%d;%dm [%d,%d]: " FORMAT "%c[%d;%dm\n",  27, (1+(rank/7))%2, 31+(6+rank)%7, rank, clk.data, ##__VA_ARGS__, 27,0,37);
+/* logging stuff */
 
 /* state stuff */
 enum StateType : int {
@@ -117,6 +154,8 @@ enum StateType : int {
   WAIT_END,
   FINISHED,
 };
+
+std::string toString(StateType state);
 
 class State : public Channel<StateType>{
 public:
@@ -137,6 +176,7 @@ public:
   }
 
   void changeState(StateType newState){
+    debug("przechodzę do stanu: %s", toString(newState).c_str());
     lock();
     if(data == FINISHED){
       unlock();
@@ -157,27 +197,8 @@ public:
   State(){
     data = INIT;
   }
-} extern currentState;
+};
 /* state stuff */
-
-/* lamport here */
-class LamportClock : public Channel<int>{
-public:
-  int update(int recv_timestamp){
-    lock();
-    data = std::max(recv_timestamp, data)+1;
-    unlock();
-    return data;
-  }
-  LamportClock operator++(int){
-    lock();
-    LamportClock tmp = *this;
-    data++;
-    unlock();
-    return tmp;
-  }
-} extern clk;
-/* lamport here */
 
 class Counter: public Channel<int>{
 public:
@@ -185,13 +206,10 @@ public:
   std::vector<int> nack;
 
   int total;
-  int allowed_nack;
+  int allowedNack;
 
   Counter(){}
-  Counter(int n_responses, int nack_threshold){
-    total = n_responses;
-    allowed_nack = nack_threshold;
-  }
+  Counter(int total, int allowedNack): total(total), allowedNack(allowedNack){}
   void reset(){
     lock();
     ack = 0;
@@ -225,10 +243,10 @@ public:
     while(ack + nack.size() < total) wait();
     unlock();
   }
-  void await_entry(){
-	lock();
-	while(ack + nack.size() < total || nack.size() > allowed_nack) wait();
-	unlock();
+  void awaitEntry(){
+  	lock();
+  	while(ack + nack.size() < total && nack.size() > allowedNack) wait();
+  	unlock();
   }
 };
 
@@ -251,12 +269,14 @@ public:
     signal();
     unlock();
   }
+
   void pop(){
     lock();
     packet_pq::pop();
     signal();
     unlock();
   }
+
   void clear(){
     lock();
     while(!packet_pq::empty()){
@@ -265,8 +285,13 @@ public:
     signal();
     unlock();
   }
+
+  const packet_t& findPkt(int src){
+    auto it =  std::find_if(vec().begin(),vec().end(),[&](const packet_t& tmp){return tmp.src==src;});
+    if(it != vec().end()){
+      return it[0];
+    }
+
+    throw std::logic_error("packet with src: "+std::to_string(src)+" not found");
+  }
 };
-
-extern PacketChannel waitQueue;
-
-extern Counter cnt;

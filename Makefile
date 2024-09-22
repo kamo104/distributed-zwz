@@ -17,4 +17,4 @@ clean:
 
 # mpiexec ??
 run: main
-	mpirun -oversubscribe -np 8 ./main -c 10 -g 2
+	mpirun -oversubscribe -np 2 -oversubscribe ./main -g 1 -c 2

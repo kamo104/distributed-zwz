@@ -2,6 +2,7 @@
 #include <comms.hpp>
 
 #include <cstdint>
+#include <string>
 
 /* communication thread */
 void* CommThread::start(void* ptr){
@@ -10,35 +11,34 @@ void* CommThread::start(void* ptr){
   while(currentState != FINISHED && 
     currentCycle != cyclesNum-1)
   {
-    MPI_Recv(&tmp, 1, MPI_BYTE, MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, &status);
+    MPI_Recv(&tmp, sizeof(packet_t), MPI_BYTE, MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, &status);
+    // debug("recv pktDump:\n%s", packetDump(tmp).c_str());
   	// update Lamport Clock
   	clk.update(tmp.timestamp);
+  	debug("otrzymałem: %s",toString(tmp.type).c_str());
     switch(tmp.type){
       case ACK : {
-        debug("otrzymałem ACK");
-        currentState.lock();
         switch(currentState){
           case INIT : case WAIT_ROLE : case WAIT_GUN : {
-            cnt.incrACK();
+            roleCounter.incrACK();
             break;
           }
           case WAIT_PAIR : {
-            debug("przechodzę do stanu WAIT_GUN");
             currentState.changeState(WAIT_GUN);
             break;
           }
-          default : {
-            debug("jestem w stanie innym niż {INIT, WAIT_ROLE, WAIT_GUN, WAIT_PAIR}, a otrzymałem ACK, WTF");
-            break;
-          }
         }
-        currentState.unlock();
         break;
       }
+      case NACK : {
+        roleCounter.incrNACK(tmp.src);
+		    break;
+      }
       case REQ : {
-        debug("dostałem REQ");
         waitQueue.push(tmp);
-        if(tmp.timestamp<clk.data 
+        // FIX: compare my waitQueue entry not current clock
+        const packet_t& myPkt = waitQueue.findPkt(rank);
+        if(tmp.timestamp>myPkt.timestamp 
             && currentState <= ROLLING){
           // send nack
           debug("odsyłam NACK");
@@ -50,30 +50,22 @@ void* CommThread::start(void* ptr){
         sendPacket(&tmp,tmp.src,ACK);
         break;
       }
-      case NACK : {
-        debug("otrzymałem NACK");
-        cnt.incrNACK(tmp.src);
-		    break;
-      }
       case RELEASE : {
-        debug("otrzymałem RELEASE");
-        cnt.convert(tmp.src);
+        roleCounter.convert(tmp.src);
 		    break;
       }
       case ROLL : {
-        debug("otrzymałem ROLL");
     		int pairRollVal = tmp.value;
     		if(rollVal == -1){
     			rollVal = random()%INT32_MAX;
     			tmp.value = rollVal;
-    			sendPacket(&tmp, currPair, ROLL);
+    			sendPacket(&tmp, tmp.src, ROLL);
     		}
     		if(rollVal < pairRollVal) winAmount++;
     		// TODO: send RELEASEs to free gun if killer
         break;
       }
       case END : {
-        debug("otrzymałem END");
         currentState.lock();
         if(currentState >= WAIT_END){
           // send END to next in the ring
@@ -88,12 +80,11 @@ void* CommThread::start(void* ptr){
         break;
       }
       case GUN: {
-        debug("otrzymałem GUN");
         break;
       }
       case PAIR: {
-        debug("otrzymałem PAIR");
         sendPacket(NULL, tmp.src, ACK);
+        // TODO: check if we're ready to pair up?
         currentState.changeState(ROLLING);
         break;
       }
