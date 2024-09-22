@@ -83,11 +83,17 @@ void mainLoop(){
 				break;
 			}
 			case WAIT_END : {
+				//TODO: end cycle barrier
 				break;
 			}
 			case FINISHED : {
-				currentCycle += 1;
-				if (++currentCycle == cyclesNum){
+				// if finished last cycle and had highest priority last cycle
+				if (++currentCycle == cyclesNum && waitQueue.vec()[0].src == rank){
+					tmp.topScore = winAmount;
+					tmp.topId = rank;
+					tmp.value = 0;
+					debug("rozpoczynam zliczanie punktów i koniec rundy");
+					sendPacket(&tmp, (rank+1)%size, SCORE);
 					return;
 				}
 				currentState.changeState(INIT);

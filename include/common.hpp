@@ -87,6 +87,7 @@ enum PacketType : int{
   GUN,
   ROLL,
   END,
+  SCORE,
 };
 
 struct packet_t {
@@ -101,6 +102,10 @@ struct packet_t {
 
   // używane w tokenie i rolling
   int value;
+
+  // token ustalania wyniku
+  int topScore;
+  int topId;
 };
 
 void sendPacket(packet_t *pkt, int destination, PacketType tag, bool increment=true);

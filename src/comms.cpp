@@ -70,6 +70,7 @@ void* CommThread::start(void* ptr){
     		}
     		if(rollVal < pairRollVal) winAmount++;
     		// TODO: send RELEASEs to free gun if killer
+			// TODO: move to end cycle barrier
         break;
       }
       case END : {
@@ -87,6 +88,24 @@ void* CommThread::start(void* ptr){
         currentState.unlock();
         break;
       }
+	  case SCORE: {
+		debug("otrzymałem SCORE");
+        currentState.lock();
+		if(tmp.value == size){
+			println("Koniec rundy. Wygrał proces ID "+stoi(tmp.topId)+" z wynikiem "+stoi(tmp.topScore)+".");
+		} else {
+			if(winAmount > tmp.topScore){
+				tmp.topScore = winAmount;
+				tmp.topId = rank;
+			}
+			if(currentState < WAIT_END) tmp.value = 0;
+			else tmp.value++;
+			debug("przesyłam SCORE dalej");
+        	sendPacket(&tmp,(rank+1)%size, SCORE);
+		}
+		currentState.unlock();
+		break;
+	  }
       case GUN: {
         debug("otrzymałem GUN");
         break;
