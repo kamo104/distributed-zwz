@@ -20,6 +20,7 @@ extern int rank;
 extern int size, guns;
 extern int currPair;
 extern int rollVal;
+extern int highestPriorityID;
 /* global variables */
 
 /* logging stuff */

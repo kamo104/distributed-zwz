@@ -9,7 +9,7 @@
 /* global variables */
 int winAmount = 0, currentCycle = 0;
 int size, rank, guns, cyclesNum;
-int currPair;
+int currPair, highestPriorityID;
 int rollVal = -1;
 PacketChannel waitQueue;
 
@@ -41,6 +41,7 @@ void mainLoop(){
 			}
 			case WAIT_ROLE : {
 				cnt.await();
+				highestPriorityID = waitQueue.vec()[0].src;
 
 				// TODO: check/remove possibly erroneus mutex lock
 				currentState.lock();
@@ -83,12 +84,17 @@ void mainLoop(){
 				break;
 			}
 			case WAIT_END : {
-				//TODO: end cycle barrier
+				// if highest priority begin end cycle barrier
+				if(highestPriorityID == rank){
+					tmp.value = 0;
+					sendPacket(&tmp, (rank+1)%size, END);
+				}
+				currentState.await();
 				break;
 			}
 			case FINISHED : {
 				// if finished last cycle and had highest priority last cycle
-				if (++currentCycle == cyclesNum && waitQueue.vec()[0].src == rank){
+				if (++currentCycle == cyclesNum && highestPriorityID == rank){
 					tmp.topScore = winAmount;
 					tmp.topId = rank;
 					tmp.value = 0;
