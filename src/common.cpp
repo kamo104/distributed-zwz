@@ -3,17 +3,27 @@
 /* packet stuff */
 std::string toString(PacketType pkt){
   switch(pkt){
-    case REQ : return "REQ";
-    case ACK : return "ACK";
-    case NACK : return "NACK";
-    case RELEASE : return "RELEASE";
-    case PAIR : return "PAIR";
-    case GUN : return "GUN";
-    case ROLL : return "ROLL";
-    case END : return "END";
+    case ROLE: return "ROLE";
+    case ROLE_ACK: return "ROLE_ACK";
+    case ROLE_NACK: return "ROLE_NACK";
+    case PAIR: return "PAIR";
+    case PAIR_ACK: return "PAIR_ACK";
+    case PAIR_NACK: return "PAIR_NACK";
+    case GUN: return "GUN";
+    case GUN_ACK: return "GUN_ACK";
+    case GUN_NACK: return "GUN_NACK";
+    case RELEASE: return "RELEASE";
+    case ROLL: return "ROLL";
+    case END: return "END";
     default : return "NONE";
   }
 }
+
+bool compare(const packet_t& p1, const packet_t& p2){
+  if(p1.timestamp==p2.timestamp) return p1.src < p2.src;
+  return p1.timestamp < p2.timestamp;
+}
+
 std::string packetDump(const packet_t &pkt){
   std::ostringstream is;
   is << "type: " << toString(pkt.type) << "\n";
@@ -31,8 +41,8 @@ void sendPacket(packet_t *pkt, int destination, PacketType tag, bool increment){
   pkt->dst = destination;
   pkt->timestamp = clk.data;
 
+  debug("wysyłam %s do %d", toString(pkt->type).c_str(), pkt->dst)
   if(increment) clk++;
-  debug("wysyłam: %s", toString(pkt->type).c_str())
 
   MPI_Send(pkt,sizeof(packet_t),MPI_BYTE,destination,tag, MPI_COMM_WORLD);
 

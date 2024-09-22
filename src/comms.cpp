@@ -12,44 +12,70 @@ void* CommThread::start(void* ptr){
     currentCycle != cyclesNum-1)
   {
     MPI_Recv(&tmp, sizeof(packet_t), MPI_BYTE, MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, &status);
-    // debug("recv pktDump:\n%s", packetDump(tmp).c_str());
   	// update Lamport Clock
   	clk.update(tmp.timestamp);
-  	debug("otrzymałem: %s",toString(tmp.type).c_str());
+    // debug("recv pktDump:\n%s", packetDump(tmp).c_str());
+    debug("otrzymałem %s od %d", toString(tmp.type).c_str(), tmp.src)
     switch(tmp.type){
-      case ACK : {
-        switch(currentState){
-          case INIT : case WAIT_ROLE : case WAIT_GUN : {
-            roleCounter.incrACK();
-            break;
-          }
-          case WAIT_PAIR : {
-            currentState.changeState(WAIT_GUN);
-            break;
-          }
+      case ROLE : {
+        roleQueue.push(tmp);
+        // FIX: compare my waitQueue entry not current clock
+        if(roleQueue.findPkt(rank) == NULL ||
+           compare(tmp,*roleQueue.findPkt(rank))){
+          sendPacket(&tmp, tmp.src, ROLE_ACK);
+          break;
         }
+        sendPacket(&tmp,tmp.src, ROLE_NACK);
         break;
       }
-      case NACK : {
+      case ROLE_ACK : {
+        roleCounter.incrACK();
+        break;
+      }
+      case ROLE_NACK : {
         roleCounter.incrNACK(tmp.src);
 		    break;
       }
-      case REQ : {
-        roleQueue.push(tmp);
-        // FIX: compare my waitQueue entry not current clock
-        const packet_t& myPkt = roleQueue.findPkt(rank);
-        if(tmp.timestamp>myPkt.timestamp 
-            && currentState <= ROLLING){
-          // send nack
-          sendPacket(&tmp, tmp.src, NACK);
+      case PAIR: {
+        if (currentState != WAIT_PAIR){
+          sendPacket(NULL, tmp.src, PAIR_NACK);
           break;
         }
-        // send ack
-        sendPacket(&tmp,tmp.src,ACK);
+        sendPacket(NULL, tmp.src, PAIR_ACK);
+        currentState.changeState(ROLLING);
+        break;
+      }
+      case PAIR_ACK: {
+        if(killer) currentState.changeState(WAIT_GUN);
+        else currentState.changeState(ROLLING);
+        break;
+      }
+      case PAIR_NACK: {
+        usleep(100);
+        sendPacket(NULL, currPair, PAIR);
+        break;
+      }
+      case GUN: {
+        gunQueue.push(tmp);
+        if(gunQueue.findPkt(rank) == NULL || 
+           compare(tmp,*gunQueue.findPkt(rank))){
+          sendPacket(&tmp, tmp.src, GUN_ACK);
+          break;
+        }
+        sendPacket(&tmp,tmp.src, GUN_NACK);
+        break;
+      }
+      case GUN_ACK: {
+        gunCounter.incrACK();
+        break;
+      }
+      case GUN_NACK: {
+        gunCounter.incrNACK(tmp.src);
         break;
       }
       case RELEASE : {
-        roleCounter.convert(tmp.src);
+        gunCounter.convert(tmp.src);
+        gunQueue.remove(tmp.src);
 		    break;
       }
       case ROLL : {
@@ -60,7 +86,7 @@ void* CommThread::start(void* ptr){
     			sendPacket(&tmp, tmp.src, ROLL);
     		}
     		if(rollVal < pairRollVal) winAmount++;
-    		// TODO: send RELEASEs to free gun if killer
+    		currentState.changeState(WAIT_END);
         break;
       }
       case END : {
@@ -72,20 +98,9 @@ void* CommThread::start(void* ptr){
           currentState.unlock();
           break;
         }
-        debug("odpowiadam NACK z powodu stanu");
-        sendPacket(&tmp, tmp.value, NACK);
-        currentState.unlock();
-        break;
-      }
-      case GUN: {
-        gunQueue.push(tmp);
-
-        break;
-      }
-      case PAIR: {
-        sendPacket(NULL, tmp.src, ACK);
-        // TODO: check if we're ready to pair up?
-        currentState.changeState(ROLLING);
+        // debug("odpowiadam NACK z powodu stanu");
+        // sendPacket(&tmp, tmp.value, NACK);
+        // currentState.unlock();
         break;
       }
     }

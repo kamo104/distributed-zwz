@@ -28,6 +28,7 @@ extern int rank;
 extern int size, guns;
 extern int currPair;
 extern int rollVal;
+extern bool killer;
 
 extern State currentState;
 extern LamportClock clk;
@@ -82,13 +83,26 @@ public:
 
 /* packet stuff */
 enum PacketType : int{
-  REQ,
-  ACK,
-  NACK,
-  RELEASE,
+  // role selection
+  ROLE,
+  ROLE_ACK,
+  ROLE_NACK,
+
+  // pairing
   PAIR,
+  PAIR_ACK,
+  PAIR_NACK,
+
+  // gun aquisition
   GUN,
+  GUN_ACK,
+  GUN_NACK,
+  RELEASE,
+
+  // rolling
   ROLL,
+
+  // ending
   END,
 };
 
@@ -109,6 +123,8 @@ struct packet_t {
   int value;
 };
 #pragma pack(pop)
+
+bool compare(const packet_t& p1, const packet_t& p2);
 
 std::string packetDump(const packet_t &pkt);
 
@@ -176,7 +192,7 @@ public:
   }
 
   void changeState(StateType newState){
-    debug("przechodzę do stanu: %s", toString(newState).c_str());
+    debug("przechodzę do stanu %s", toString(newState).c_str());
     lock();
     if(data == FINISHED){
       unlock();
@@ -190,7 +206,8 @@ public:
 
   void await(){
     lock();
-    wait();
+    StateType oldState = data;
+    while(oldState==data) wait();
     unlock();
   }
 
@@ -250,37 +267,50 @@ public:
   }
   void awaitEntry(){
   	lock();
-  	while(data + nack.size() < total && nack.size() > allowedNack) wait();
+  	while(data + nack.size() < total || nack.size() > allowedNack) wait();
   	unlock();
   }
 };
-
-struct compare{
-  bool operator()(packet_t a, packet_t b){
-    return a.timestamp < b.timestamp;
-  }
-};
-
-typedef std::priority_queue<packet_t, std::vector<packet_t>, compare> packet_pq;
 
 class PacketChannel : public Channel<int>{
 protected:
   std::vector<packet_t> pkts;
 public:
-  const std::vector<packet_t>& vec(){
+  std::vector<packet_t>& vec(){
     return pkts;
   }
   void push(packet_t pkt){
     lock();
-    auto pos = std::lower_bound(pkts.begin(),pkts.end(),pkt,[](const packet_t& p1, const packet_t& p2){return p1.timestamp < p2.timestamp;});
+    auto pos = std::lower_bound(
+      pkts.begin(),
+      pkts.end(),
+      pkt,
+      compare
+    );
     pkts.insert(pos,pkt);
     signal();
     unlock();
   }
 
-  void pop(){
+  void remove(int src){
     lock();
-    pkts.erase(pkts.begin());
+    pkts.erase(
+      std::remove_if(
+        pkts.begin(),
+        pkts.end(),
+        [src](const packet_t& pkt){
+          return pkt.src==src;
+        }
+      ),
+      pkts.end()
+    );
+    signal();
+    unlock();
+  }
+
+  void pop(int index=0){
+    lock();
+    pkts.erase(pkts.begin()+index);
     signal();
     unlock();
   }
@@ -292,12 +322,13 @@ public:
     unlock();
   }
 
-  const packet_t& findPkt(int src){
-    auto it =  std::find_if(vec().begin(),vec().end(),[&](const packet_t& tmp){return tmp.src==src;});
+  const packet_t* findPkt(int src){
+    auto it =  std::find_if(vec().begin(),vec().end(),[src](const packet_t& tmp){return tmp.src==src;});
     if(it != vec().end()){
-      return it[0];
+      return &it[0];
     }
 
-    throw std::logic_error("packet with src: "+std::to_string(src)+" not found");
+    return NULL;
+    // throw std::logic_error("packet with src: "+std::to_string(src)+" not found");
   }
 };

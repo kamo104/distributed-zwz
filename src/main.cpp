@@ -2,6 +2,7 @@
 #include <comms.hpp>
 #include <cstdlib>
 #include <mpi.h>
+#include <string>
 #include <util.hpp>
 #include <chrono>
 #include <ranges>
@@ -9,13 +10,14 @@
 /* global variables */
 int winAmount = 0, currentCycle = 0;
 int size, rank, guns, cyclesNum;
-int currPair;
+int currPair = -1;
+bool killer = false;
 int rollVal = -1;
 PacketChannel roleQueue, gunQueue;
+Counter roleCounter, gunCounter;
 
 State currentState;
 LamportClock clk;
-Counter roleCounter, gunCounter;
 /* global variables */
 
 void mainLoop(){
@@ -25,63 +27,97 @@ void mainLoop(){
 	while(currentState != FINISHED && currentCycle != cyclesNum-1){
 		switch(currentState){
 			case INIT : {
-			  // cnt = Counter(size-1, size/2 - 1);
 			  roleCounter.lock();
+			  roleQueue.lock();
 			  currentState.changeState(WAIT_ROLE);
-			  debug("ubiegam się o dostęp do sekcji krytycznej zabójców");
+			  // debug("ubiegam się o dostęp do sekcji krytycznej zabójców");
+			  clk.lock();
 			  for(int dst : std::ranges::iota_view(0,size)){
 			  	if(dst==rank) continue;
-			  	sendPacket(&tmp, dst, REQ, false);
+			  	sendPacket(&tmp, dst, ROLE, false);
 			  }
 			  roleQueue.push(tmp);
 			  clk++;
+			  clk.unlock();
+			  roleQueue.unlock();
 			  roleCounter.unlock();
 				break;
 			}
 			case WAIT_ROLE : {
 				roleCounter.await();
 
-				// TODO: check/remove possibly erroneus mutex lock
-				// currentState.lock();
-
+				roleQueue.lock();
+				// determine index of my role_REQ
 				auto it = std::find_if(roleQueue.vec().begin(),roleQueue.vec().end(),[](const packet_t& pkt){return pkt.src==rank;});
 				myId = std::distance(roleQueue.vec().begin(),it);
 
 				int size2 = roleQueue.vec().size()/2;
-				pairId = size2 > myId ? size2+myId : myId-size2;
-				debug("myId: %d; pairId: %d",myId,pairId);
+
+				if(size2>myId) killer = true;
+				else killer = false;
+
+				// determine pairRank
+				pairId = killer ? size2+myId : myId-size2;
 
 				currPair = roleQueue.vec()[pairId].src;
+				roleQueue.unlock();
+				debug("pairRank: %d",currPair);
 
-				// if I'm the killer send a pair req and set cnt to killer mode
-				// TODO: double check if this has a possibility of firing off before other processes get their counter swapped
+				// if I'm the killer send a pair req
 				if(myId<pairId){
 					sendPacket(NULL, currPair, PAIR);
 				}
 				currentState.changeState(WAIT_PAIR);
-				// currentState.unlock();
 				break;
 			}
-			// case ROLE_PICKED : {
-			// 	break;
-			// }
 			case WAIT_PAIR : {
-				// wait untill we get an ACK
+				// wait untill we get a PAIR_ACK
 				currentState.await();
-				// send gun requests if I'm a killer
-				for(const packet_t& pkt : roleQueue.vec()){
+				break;
+			}
+			case WAIT_GUN: {
+				// send gun requests
+				clk.lock();
+				for(int i=0;i<roleQueue.vec().size()/2;i++){
+					if(roleQueue.vec()[i].src==rank) continue;
+					sendPacket(&tmp, roleQueue.vec()[i].src, GUN, false);
 				}
+				gunQueue.push(tmp);
+				clk++;
+				clk.unlock();
+
+				// wait untill we get a gun
+				gunCounter.awaitEntry();
+				currentState.changeState(ROLLING);
 				break;
 			}
 			case ROLLING : {
-				debug("rzut kością")
+				if(!killer) {
+					currentState.await();
+					break;
+				}
+				// send ROLL
 				rollVal = random()%INT32_MAX;
 				tmp.value = rollVal;
 				sendPacket(&tmp, currPair, ROLL);
-				currentState.changeState(FINISHED);
+				clk.lock();
+
+				// give back the gun
+				for(int i=0;i<roleQueue.vec().size()/2;i++){
+					if(roleQueue.vec()[i].src==rank) continue;
+					sendPacket(&tmp, roleQueue.vec()[i].src, RELEASE, false);
+				}
+				gunQueue.lock();
+				gunQueue.remove(rank);
+				gunQueue.unlock();
+				clk++;
+				clk.unlock();
+				currentState.await();
+
 				break;
 			}
 			case WAIT_END : {
+				currentState.await();
 				break;
 			}
 			case FINISHED : {
@@ -89,13 +125,6 @@ void mainLoop(){
 					return;
 				}
 				currentState.changeState(INIT);
-				break;
-			}
-			case WAIT_GUN: {
-				roleCounter.awaitEntry(); // wait until critical section entry
-				currentState.changeState(ROLLING);
-				// TODO: give back the gun right away to the first nack we sent/noone
-				// sendPacket(tmp, , )
 				break;
 			}
     }
@@ -132,7 +161,7 @@ int main(int argc, char** argv) {
   // clk.data = random()%size+rank;
   clk.data = rank;
   roleCounter = Counter(size-1, size-1);
-	gunCounter = Counter(size/2-1,guns);
+	gunCounter = Counter(size/2-1,guns-1);
   
   // dodanie kolejnego bloku bo CommThread w destruktorze czeka na zakończenie pracy wątku
   {
