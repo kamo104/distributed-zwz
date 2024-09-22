@@ -35,18 +35,16 @@ void* CommThread::start(void* ptr){
 		    break;
       }
       case REQ : {
-        waitQueue.push(tmp);
+        roleQueue.push(tmp);
         // FIX: compare my waitQueue entry not current clock
-        const packet_t& myPkt = waitQueue.findPkt(rank);
+        const packet_t& myPkt = roleQueue.findPkt(rank);
         if(tmp.timestamp>myPkt.timestamp 
             && currentState <= ROLLING){
           // send nack
-          debug("odsyłam NACK");
           sendPacket(&tmp, tmp.src, NACK);
           break;
         }
         // send ack
-        debug("odsyłam ACK");
         sendPacket(&tmp,tmp.src,ACK);
         break;
       }
@@ -80,6 +78,8 @@ void* CommThread::start(void* ptr){
         break;
       }
       case GUN: {
+        gunQueue.push(tmp);
+
         break;
       }
       case PAIR: {

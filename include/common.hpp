@@ -31,7 +31,7 @@ extern int rollVal;
 
 extern State currentState;
 extern LamportClock clk;
-extern PacketChannel waitQueue;
+extern PacketChannel roleQueue, gunQueue;
 extern Counter roleCounter, gunCounter;
 /* global variables */
 
@@ -202,17 +202,20 @@ public:
 
 class Counter: public Channel<int>{
 public:
-  int ack = 0;
   std::vector<int> nack;
 
   int total;
   int allowedNack;
 
-  Counter(){}
-  Counter(int total, int allowedNack): total(total), allowedNack(allowedNack){}
+  Counter(){
+    data =0;
+  }
+  Counter(int total, int allowedNack): total(total), allowedNack(allowedNack){
+    data=0;
+  }
   void reset(){
     lock();
-    ack = 0;
+    data = 0;
     nack.clear();
     unlock();
   }
@@ -233,19 +236,21 @@ public:
     auto it = std::find(nack.begin(),nack.end(),src);
     if(it != nack.end()){
       nack.erase(it);
-      ack++;
+      data++;
     }
     signal();
     unlock();
   }
   void await(){
     lock();
-    while(ack + nack.size() < total) wait();
+    while(data + nack.size() < total) {
+      wait();
+    };
     unlock();
   }
   void awaitEntry(){
   	lock();
-  	while(ack + nack.size() < total && nack.size() > allowedNack) wait();
+  	while(data + nack.size() < total && nack.size() > allowedNack) wait();
   	unlock();
   }
 };
@@ -258,30 +263,31 @@ struct compare{
 
 typedef std::priority_queue<packet_t, std::vector<packet_t>, compare> packet_pq;
 
-class PacketChannel : packet_pq, public Channel<int>{
+class PacketChannel : public Channel<int>{
+protected:
+  std::vector<packet_t> pkts;
 public:
-  std::vector<packet_t>& vec(){
-    return packet_pq::c;
+  const std::vector<packet_t>& vec(){
+    return pkts;
   }
   void push(packet_t pkt){
     lock();
-    packet_pq::push(pkt);
+    auto pos = std::lower_bound(pkts.begin(),pkts.end(),pkt,[](const packet_t& p1, const packet_t& p2){return p1.timestamp < p2.timestamp;});
+    pkts.insert(pos,pkt);
     signal();
     unlock();
   }
 
   void pop(){
     lock();
-    packet_pq::pop();
+    pkts.erase(pkts.begin());
     signal();
     unlock();
   }
 
   void clear(){
     lock();
-    while(!packet_pq::empty()){
-      packet_pq::pop();
-    }
+    pkts.clear();
     signal();
     unlock();
   }

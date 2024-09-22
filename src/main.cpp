@@ -11,7 +11,7 @@ int winAmount = 0, currentCycle = 0;
 int size, rank, guns, cyclesNum;
 int currPair;
 int rollVal = -1;
-PacketChannel waitQueue;
+PacketChannel roleQueue, gunQueue;
 
 State currentState;
 LamportClock clk;
@@ -20,8 +20,8 @@ Counter roleCounter, gunCounter;
 
 void mainLoop(){
 	packet_t tmp;
-	int my_id;
-	int pair_id;
+	int myId;
+	int pairId;
 	while(currentState != FINISHED && currentCycle != cyclesNum-1){
 		switch(currentState){
 			case INIT : {
@@ -33,7 +33,7 @@ void mainLoop(){
 			  	if(dst==rank) continue;
 			  	sendPacket(&tmp, dst, REQ, false);
 			  }
-			  waitQueue.push(tmp);
+			  roleQueue.push(tmp);
 			  clk++;
 			  roleCounter.unlock();
 				break;
@@ -42,24 +42,24 @@ void mainLoop(){
 				roleCounter.await();
 
 				// TODO: check/remove possibly erroneus mutex lock
-				currentState.lock();
+				// currentState.lock();
 
-				for(int i=0;i<waitQueue.vec().size();i++){
-					if(waitQueue.vec()[i].src!=rank)continue;
-					my_id = i;
-				}
-				int size2 =waitQueue.vec().size()/2;
-				pair_id = size2 > my_id ? size2+my_id : my_id-size2;
+				auto it = std::find_if(roleQueue.vec().begin(),roleQueue.vec().end(),[](const packet_t& pkt){return pkt.src==rank;});
+				myId = std::distance(roleQueue.vec().begin(),it);
 
-				currPair = waitQueue.vec()[pair_id].src;
+				int size2 = roleQueue.vec().size()/2;
+				pairId = size2 > myId ? size2+myId : myId-size2;
+				debug("myId: %d; pairId: %d",myId,pairId);
+
+				currPair = roleQueue.vec()[pairId].src;
 
 				// if I'm the killer send a pair req and set cnt to killer mode
 				// TODO: double check if this has a possibility of firing off before other processes get their counter swapped
-				if(my_id<pair_id){
+				if(myId<pairId){
 					sendPacket(NULL, currPair, PAIR);
 				}
 				currentState.changeState(WAIT_PAIR);
-				currentState.unlock();
+				// currentState.unlock();
 				break;
 			}
 			// case ROLE_PICKED : {
@@ -69,8 +69,8 @@ void mainLoop(){
 				// wait untill we get an ACK
 				currentState.await();
 				// send gun requests if I'm a killer
-				// for(const packet_t& pkt:waitQueue.vec().){
-				// }
+				for(const packet_t& pkt : roleQueue.vec()){
+				}
 				break;
 			}
 			case ROLLING : {
@@ -131,7 +131,7 @@ int main(int argc, char** argv) {
 
   // clk.data = random()%size+rank;
   clk.data = rank;
-  roleCounter = Counter(size-1, size/2 - 1);
+  roleCounter = Counter(size-1, size-1);
 	gunCounter = Counter(size/2-1,guns);
   
   // dodanie kolejnego bloku bo CommThread w destruktorze czeka na zakończenie pracy wątku
