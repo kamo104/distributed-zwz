@@ -85,7 +85,6 @@ void mainLoop(){
 				break;
 			}
 			case FINISHED : {
-				currentCycle += 1;
 				if (++currentCycle == cyclesNum){
 					return;
 				}
