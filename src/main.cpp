@@ -12,6 +12,7 @@ int winAmount = 0, currentCycle = 0;
 int size, rank, guns, cyclesNum;
 int currPair = -1;
 bool killer = false;
+int highestPriorityID;
 int rollVal = -1;
 PacketChannel roleQueue, gunQueue;
 Counter roleCounter, gunCounter;
@@ -45,6 +46,7 @@ void mainLoop(){
 			}
 			case WAIT_ROLE : {
 				roleCounter.await();
+				highestPriorityID = roleQueue.vec()[0].src;
 
 				roleQueue.lock();
 				// determine index of my role_REQ
@@ -117,11 +119,22 @@ void mainLoop(){
 				break;
 			}
 			case WAIT_END : {
+				// if highest priority begin end cycle barrier
+				if(highestPriorityID == rank){
+					tmp.value = 0;
+					sendPacket(&tmp, (rank+1)%size, END);
+				}
 				currentState.await();
 				break;
 			}
 			case FINISHED : {
-				if (++currentCycle == cyclesNum){
+				// if finished last cycle and had highest priority last cycle
+				if (++currentCycle == cyclesNum && highestPriorityID == rank){
+					tmp.topScore = winAmount;
+					tmp.topId = rank;
+					tmp.value = 0;
+					debug("rozpoczynam zliczanie punktów i koniec rundy");
+					sendPacket(&tmp, (rank+1)%size, SCORE);
 					return;
 				}
 				currentState.changeState(INIT);

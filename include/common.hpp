@@ -29,6 +29,7 @@ extern int size, guns;
 extern int currPair;
 extern int rollVal;
 extern bool killer;
+extern int highestPriorityID;
 
 extern State currentState;
 extern LamportClock clk;
@@ -104,6 +105,7 @@ enum PacketType : int{
 
   // ending
   END,
+  SCORE,
 };
 
 std::string toString(PacketType pkt);
@@ -121,6 +123,10 @@ struct packet_t {
 
   // używane w tokenie i rolling
   int value;
+
+  // token ustalania wyniku
+  int topScore;
+  int topId;
 };
 #pragma pack(pop)
 
