@@ -8,14 +8,18 @@
 #include <ranges>
 
 /* global variables */
+// out stats
 int winAmount = 0, currentCycle = 0;
+// input vars
 int size, rank, guns, cyclesNum;
-int currPair = -1;
-bool killer = false;
+// vars
+int currPair;
+bool killer;
 int highestPriorityID;
-int rollVal = -1;
-PacketChannel roleQueue, gunQueue;
-Counter roleCounter, gunCounter;
+int rollVal;
+// classes
+PacketChannel roleChannel, gunChannel;
+// Counter roleCounter, gunCounter;
 
 State currentState;
 LamportClock clk;
@@ -25,11 +29,10 @@ void mainLoop(){
 	packet_t tmp;
 	int myId;
 	int pairId;
-	while(currentState != FINISHED && currentCycle != cyclesNum-1){
+	while(!endCondition()){
 		switch(currentState){
 			case INIT : {
-			  roleCounter.lock();
-			  roleQueue.lock();
+			  roleChannel.lock();
 			  currentState.changeState(WAIT_ROLE);
 			  // debug("ubiegam się o dostęp do sekcji krytycznej zabójców");
 			  clk.lock();
@@ -37,23 +40,25 @@ void mainLoop(){
 			  	if(dst==rank) continue;
 			  	sendPacket(&tmp, dst, ROLE, false);
 			  }
-			  roleQueue.push(tmp);
+			  roleChannel.qpush(tmp);
 			  clk++;
 			  clk.unlock();
-			  roleQueue.unlock();
-			  roleCounter.unlock();
+			  roleChannel.unlock();
 				break;
 			}
 			case WAIT_ROLE : {
-				roleCounter.await();
-				highestPriorityID = roleQueue.vec()[0].src;
+				// BUG: we can get an ACK before someone sends 
+				//      us a ROLE_REQ. Make sure roleQueue is full.
+				// FIX: merge roleCounter and roleQueue
+				// FIXED: ??? error doesn't appear anymore
+				roleChannel.awaitRole();
+				roleChannel.lock();
+				highestPriorityID = roleChannel.queue()[0].src;
 
-				roleQueue.lock();
 				// determine index of my role_REQ
-				auto it = std::find_if(roleQueue.vec().begin(),roleQueue.vec().end(),[](const packet_t& pkt){return pkt.src==rank;});
-				myId = std::distance(roleQueue.vec().begin(),it);
+				myId = roleChannel.qgetIndex(rank);
 
-				int size2 = roleQueue.vec().size()/2;
+				int size2 = roleChannel.queue().size()/2;
 
 				if(size2>myId) killer = true;
 				else killer = false;
@@ -61,9 +66,14 @@ void mainLoop(){
 				// determine pairRank
 				pairId = killer ? size2+myId : myId-size2;
 
-				currPair = roleQueue.vec()[pairId].src;
-				roleQueue.unlock();
-				debug("pairRank: %d",currPair);
+				currPair = roleChannel.queue()[pairId].src;
+				roleChannel.unlock();
+				// roleChannel.dump();
+				// debug("pairRank: %d",currPair);
+				std::ostringstream oss;
+				oss << "size2: " << size2 << " myId: " << myId <<
+				" pairId: " << pairId;
+				debug("pairing: %s",oss.str().c_str())
 
 				// if I'm the killer send a pair req
 				if(myId<pairId){
@@ -79,17 +89,19 @@ void mainLoop(){
 			}
 			case WAIT_GUN: {
 				// send gun requests
+				roleChannel.lock();
 				clk.lock();
-				for(int i=0;i<roleQueue.vec().size()/2;i++){
-					if(roleQueue.vec()[i].src==rank) continue;
-					sendPacket(&tmp, roleQueue.vec()[i].src, GUN, false);
+				for(int i=0;i<roleChannel.queue().size()/2;i++){
+					if(roleChannel.queue()[i].src==rank) continue;
+					sendPacket(&tmp, roleChannel.queue()[i].src, GUN, false);
 				}
-				gunQueue.push(tmp);
 				clk++;
 				clk.unlock();
+				gunChannel.qpush(tmp);
+				roleChannel.unlock();
 
 				// wait untill we get a gun
-				gunCounter.awaitEntry();
+				gunChannel.awaitGun();
 				currentState.changeState(ROLLING);
 				break;
 			}
@@ -102,18 +114,17 @@ void mainLoop(){
 				rollVal = random()%INT32_MAX;
 				tmp.value = rollVal;
 				sendPacket(&tmp, currPair, ROLL);
-				clk.lock();
-
+				gunChannel.lock();
 				// give back the gun
-				for(int i=0;i<roleQueue.vec().size()/2;i++){
-					if(roleQueue.vec()[i].src==rank) continue;
-					sendPacket(&tmp, roleQueue.vec()[i].src, RELEASE, false);
+				clk.lock();
+				for(int i=0;i<roleChannel.queue().size()/2;i++){
+					if(roleChannel.queue()[i].src==rank) continue;
+					sendPacket(&tmp, roleChannel.queue()[i].src, RELEASE, false);
 				}
-				gunQueue.lock();
-				gunQueue.remove(rank);
-				gunQueue.unlock();
 				clk++;
 				clk.unlock();
+				gunChannel.qremove(rank);
+				gunChannel.unlock();
 				currentState.await();
 
 				break;
@@ -128,14 +139,19 @@ void mainLoop(){
 				break;
 			}
 			case FINISHED : {
+				++currentCycle;
 				// if finished last cycle and had highest priority last cycle
-				if (++currentCycle == cyclesNum && highestPriorityID == rank){
+				if (endCondition() && highestPriorityID == rank){
 					tmp.topScore = winAmount;
 					tmp.topId = rank;
 					tmp.value = 0;
-					debug("rozpoczynam zliczanie punktów i koniec rundy");
+					// debug("rozpoczynam zliczanie punktów i koniec rundy");
 					sendPacket(&tmp, (rank+1)%size, SCORE);
-					return;
+					break;
+				}
+				// program end detection
+				if(endCondition()){
+					break;
 				}
 				currentState.changeState(INIT);
 				break;
@@ -171,10 +187,9 @@ int main(int argc, char** argv) {
   // init licznika
   // cnt = Counter(size-1, size/2 - 1);
 
-  // clk.data = random()%size+rank;
-  clk.data = rank;
-  roleCounter = Counter(size-1, size-1);
-	gunCounter = Counter(size/2-1,guns-1);
+  clk.data = random()%(size*2)+rank;
+  // clk.data = rank;
+  init();
   
   // dodanie kolejnego bloku bo CommThread w destruktorze czeka na zakończenie pracy wątku
   {

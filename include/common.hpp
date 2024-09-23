@@ -1,8 +1,7 @@
 #pragma once
 
+#include <cstdint>
 #include <mpi.h>
-#include <queue>
-#include <stdexcept>
 #include <stdio.h>
 #include <stdlib.h>
 #include <stddef.h>
@@ -17,7 +16,7 @@
 
 class PacketChannel;
 class State;
-class Counter;
+// class Counter;
 class LamportClock;
 
 /* global variables */
@@ -33,8 +32,11 @@ extern int highestPriorityID;
 
 extern State currentState;
 extern LamportClock clk;
-extern PacketChannel roleQueue, gunQueue;
-extern Counter roleCounter, gunCounter;
+extern PacketChannel roleChannel, gunChannel;
+// extern Counter roleCounter, gunCounter;
+
+void init();
+bool endCondition();
 /* global variables */
 
 /* channel stuff */
@@ -83,7 +85,7 @@ public:
 /* channel stuff */
 
 /* packet stuff */
-enum PacketType : int{
+enum PacketType : uint8_t{
   // role selection
   ROLE,
   ROLE_ACK,
@@ -107,7 +109,9 @@ enum PacketType : int{
   END,
   SCORE,
 };
-
+bool isACK(PacketType pkt);
+bool isNACK(PacketType pkt);
+PacketType toACK(PacketType pkt);
 std::string toString(PacketType pkt);
 
 #pragma pack(push,1)
@@ -166,10 +170,9 @@ public:
 /* logging stuff */
 
 /* state stuff */
-enum StateType : int {
+enum StateType : uint8_t {
   INIT,
   WAIT_ROLE,
-  ROLE_PICKED,
   WAIT_PAIR,
   WAIT_GUN,
   ROLLING,
@@ -200,10 +203,6 @@ public:
   void changeState(StateType newState){
     debug("przechodzę do stanu %s", toString(newState).c_str());
     lock();
-    if(data == FINISHED){
-      unlock();
-      return;
-    }
     data = newState;
     signal();
     unlock();
@@ -223,118 +222,193 @@ public:
 };
 /* state stuff */
 
-class Counter: public Channel<int>{
-public:
-  std::vector<int> nack;
+// class Counter: public Channel<int>{
+// public:
+//   std::vector<int> nack;
 
+//   int total;
+//   int allowedNack;
+
+//   Counter(){
+//     data =0;
+//   }
+//   Counter(int total, int allowedNack): total(total), allowedNack(allowedNack){
+//     data=0;
+//   }
+//   void incrACK(){
+//     lock();
+//     data++;
+//     signal();
+//     unlock();
+//   }
+//   void incrNACK(int src){
+//     lock();
+//     nack.push_back(src);
+//     signal();
+//     unlock();
+//   }
+//   // void convert(int src){
+//   //   lock();
+//   //   auto it = std::find(nack.begin(),nack.end(),src);
+//   //   if(it != nack.end()){
+//   //     nack.erase(it);
+//   //     data++;
+//   //   }
+//   //   signal();
+//   //   unlock();
+//   // }
+// };
+
+class PacketChannel : public Channel<std::vector<packet_t>> {
+protected:
+  std::vector<packet_t> resp;
   int total;
   int allowedNack;
+public:
+  PacketChannel(){}
+  PacketChannel(int total, int allowedNack): total(total), allowedNack(allowedNack){}
+  std::vector<packet_t>& queue(){
+    return data;
+  }
+  std::vector<packet_t>& responses(){
+    return resp;
+  }
+  void qpush(packet_t pkt){
+    lock();
+    auto pos = std::lower_bound(
+      data.begin(),
+      data.end(),
+      pkt,
+      compare
+    );
+    data.insert(pos,pkt);
+    signal();
+    unlock();
+  }
+  void rpush(packet_t pkt){
+    lock();
+    resp.push_back(pkt);
+    signal();
+    unlock();
+  }
 
-  Counter(){
-    data =0;
-  }
-  Counter(int total, int allowedNack): total(total), allowedNack(allowedNack){
-    data=0;
-  }
-  void reset(){
+  void qremove(int src){
     lock();
-    data = 0;
-    nack.clear();
-    unlock();
-  }
-  void incrACK(){
-    lock();
-    data++;
+    data.erase(
+      std::remove_if(
+        data.begin(),
+        data.end(),
+        [src](const packet_t pkt){
+          return pkt.src==src;
+        }
+      ),
+      data.end()
+    );
     signal();
     unlock();
   }
-  void incrNACK(int src){
+
+  void rconvert(int src){
     lock();
-    nack.push_back(src);
-    signal();
-    unlock();
-  }
-  void convert(int src){
-    lock();
-    auto it = std::find(nack.begin(),nack.end(),src);
-    if(it != nack.end()){
-      nack.erase(it);
-      data++;
+    auto it = std::find_if(resp.begin(),resp.end(), [src](const packet_t& pkt){
+      return pkt.src ==src;
+    });
+    if(it != resp.end()){
+      it->type = toACK(it->type);
     }
     signal();
     unlock();
   }
-  void await(){
-    lock();
-    while(data + nack.size() < total) {
-      wait();
-    };
-    unlock();
-  }
-  void awaitEntry(){
-  	lock();
-  	while(data + nack.size() < total || nack.size() > allowedNack) wait();
-  	unlock();
-  }
-};
 
-class PacketChannel : public Channel<int>{
-protected:
-  std::vector<packet_t> pkts;
-public:
-  std::vector<packet_t>& vec(){
-    return pkts;
-  }
-  void push(packet_t pkt){
-    lock();
-    auto pos = std::lower_bound(
-      pkts.begin(),
-      pkts.end(),
-      pkt,
-      compare
-    );
-    pkts.insert(pos,pkt);
-    signal();
-    unlock();
-  }
-
-  void remove(int src){
-    lock();
-    pkts.erase(
-      std::remove_if(
-        pkts.begin(),
-        pkts.end(),
-        [src](const packet_t& pkt){
-          return pkt.src==src;
-        }
-      ),
-      pkts.end()
-    );
-    signal();
-    unlock();
-  }
-
-  void pop(int index=0){
-    lock();
-    pkts.erase(pkts.begin()+index);
-    signal();
-    unlock();
+  void dump(){
+		std::ostringstream oss;
+		oss << "queue: ";
+		for(int i=0;i<data.size();i++){
+			oss << "from: " << data[i].src << " type: " << toString(data[i].type) << " ; ";
+		}
+		oss << "\n responses: ";
+		for(int i=0;i<resp.size();i++){
+			oss << "from: " << resp[i].src << " type: " << toString(resp[i].type) << " ; ";
+		}
+		debug("%s",oss.str().c_str())
   }
 
   void clear(){
     lock();
-    pkts.clear();
+    data.clear();
+    resp.clear();
     signal();
     unlock();
   }
-
-  const packet_t* findPkt(int src){
-    auto it =  std::find_if(vec().begin(),vec().end(),[src](const packet_t& tmp){return tmp.src==src;});
-    if(it != vec().end()){
-      return &it[0];
-    }
-
-    return NULL;
-    // throw std::logic_error("packet with src: "+std::to_string(src)+" not found");
+  int countNack(){
+    return std::count_if(resp.begin(),resp.end(),[](const packet_t& pkt){
+      return isNACK(pkt.type);
+    });
   }
+  int countAck(){
+    return std::count_if(resp.begin(),resp.end(),[](const packet_t& pkt){
+      return isACK(pkt.type);
+    });
+  }
+  int rcountFrom(int src){
+    return std::count_if(resp.begin(),resp.end(),[src](const packet_t& pkt){
+      return pkt.src == src;
+    });
+  }
+  int qcountFrom(int src){
+    return std::count_if(data.begin(),data.end(),[src](const packet_t& pkt){
+      return pkt.src == src;
+    });
+  }
+  packet_t* qgetFrom(int src){
+    auto it = std::find_if(data.begin(),data.end(),[src](const packet_t& pkt){
+      return pkt.src == src;
+    });
+    if (it != data.end()) return it.base();
+    return NULL;
+  }
+  packet_t* rgetFrom(int src){
+    auto it = std::find_if(resp.begin(),resp.end(),[src](const packet_t& pkt){
+      return pkt.src == src;
+    });
+    if (it != data.end()) return it.base();
+    return NULL;
+  }
+  int qgetIndex(int src){
+    auto it = std::find_if(data.begin(),data.end(),[src](const packet_t& pkt){
+      return pkt.src == src;
+    });
+    return std::distance(data.begin(),it);
+  }
+  int rgetIndex(int src){
+    auto it = std::find_if(resp.begin(),resp.end(),[src](const packet_t& pkt){
+      return pkt.src == src;
+    });
+    return std::distance(resp.begin(),it);
+  }
+
+  void awaitRole(){
+    lock();
+  	while(
+  	  countAck() + countNack() < size-1 || 
+  	  data.size() < size) wait();
+  	unlock();
+  }
+
+  void awaitGun(){
+  	lock();
+  	while(
+  	  countAck() + countNack() < size/2-1 || 
+  	  countNack() > allowedNack) wait();
+  	unlock();
+  }
+
+  // void await(){
+  // 	lock();
+  // 	while(
+  // 	  countAck() + countNack() < total-1 || 
+  // 	  countNack() > allowedNack || 
+  // 	  data.size() < total) wait();
+  // 	unlock();
+  // }
 };

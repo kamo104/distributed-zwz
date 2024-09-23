@@ -1,6 +1,48 @@
 #include <common.hpp>
 
+/* global variables */
+void init(){
+  roleChannel.clear();
+  gunChannel.clear();
+ //  roleChannel = PacketChannel(size,size-1);
+	// gunChannel = PacketChannel(size/2-1,guns-1);
+
+	killer = false;
+  rollVal = -1;
+  currPair = -1;
+}
+
+bool endCondition(){
+  return currentCycle == cyclesNum;
+}
+/* global variables */
+
 /* packet stuff */
+bool isACK(PacketType pkt){
+  switch (pkt) {
+    case ROLE_ACK: return true;
+    case PAIR_ACK: return true;
+    case GUN_ACK: return true;
+    default: return false;
+  }
+}
+bool isNACK(PacketType pkt){
+  switch (pkt) {
+    case ROLE_NACK: return true;
+    case PAIR_NACK: return true;
+    case GUN_NACK: return true;
+    default: return false;
+  }
+}
+PacketType toACK(PacketType pkt){
+  switch(pkt){
+    case ROLE_NACK: return ROLE_ACK;
+    case PAIR_NACK: return PAIR_ACK;
+    case GUN_NACK: return GUN_ACK;
+    default: return END;
+  }
+}
+
 std::string toString(PacketType pkt){
   switch(pkt){
     case ROLE: return "ROLE";
@@ -15,6 +57,7 @@ std::string toString(PacketType pkt){
     case RELEASE: return "RELEASE";
     case ROLL: return "ROLL";
     case END: return "END";
+    case SCORE: return "SCORE";
     default : return "NONE";
   }
 }
@@ -41,7 +84,7 @@ void sendPacket(packet_t *pkt, int destination, PacketType tag, bool increment){
   pkt->dst = destination;
   pkt->timestamp = clk.data;
 
-  debug("wysyłam %s do %d", toString(pkt->type).c_str(), pkt->dst)
+  debug("wysyłam %s do %d z %d", toString(pkt->type).c_str(), pkt->dst, pkt->value)
   if(increment) clk++;
 
   MPI_Send(pkt,sizeof(packet_t),MPI_BYTE,destination,tag, MPI_COMM_WORLD);
@@ -55,7 +98,6 @@ std::string toString(StateType state){
   switch(state){
     case INIT: return "INIT";
     case WAIT_ROLE: return "WAIT_ROLE";
-    case ROLE_PICKED: return "ROLE_PICKED";
     case WAIT_PAIR: return "WAIT_PAIR";
     case WAIT_GUN: return "WAIT_GUN";
     case ROLLING: return "ROLLING";

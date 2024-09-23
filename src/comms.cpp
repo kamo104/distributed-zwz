@@ -8,9 +8,7 @@
 void* CommThread::start(void* ptr){
   packet_t tmp;
   MPI_Status status;
-  while(currentState != FINISHED && 
-    currentCycle != cyclesNum-1)
-  {
+  while(!endCondition()){
     MPI_Recv(&tmp, sizeof(packet_t), MPI_BYTE, MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, &status);
   	// update Lamport Clock
   	clk.update(tmp.timestamp);
@@ -18,22 +16,27 @@ void* CommThread::start(void* ptr){
     debug("otrzymałem %s od %d", toString(tmp.type).c_str(), tmp.src)
     switch(tmp.type){
       case ROLE : {
-        roleQueue.push(tmp);
-        // FIX: compare my waitQueue entry not current clock
-        if(roleQueue.findPkt(rank) == NULL ||
-           compare(tmp,*roleQueue.findPkt(rank))){
+        roleChannel.lock();
+        roleChannel.qpush(tmp);
+        // roleChannel.dump();
+        if(roleChannel.qcountFrom(rank) == 0 ||
+           compare(tmp,*roleChannel.qgetFrom(rank))){
+          roleChannel.unlock();
           sendPacket(&tmp, tmp.src, ROLE_ACK);
           break;
         }
+        roleChannel.unlock();
         sendPacket(&tmp,tmp.src, ROLE_NACK);
         break;
       }
       case ROLE_ACK : {
-        roleCounter.incrACK();
+        roleChannel.rpush(tmp);
+        // roleChannel.dump();
         break;
       }
       case ROLE_NACK : {
-        roleCounter.incrNACK(tmp.src);
+        roleChannel.rpush(tmp);
+        // roleChannel.dump();
 		    break;
       }
       case PAIR: {
@@ -51,31 +54,45 @@ void* CommThread::start(void* ptr){
         break;
       }
       case PAIR_NACK: {
-        usleep(100);
+        // usleep(100);
+        // sleep(1);
         sendPacket(NULL, currPair, PAIR);
         break;
       }
       case GUN: {
-        gunQueue.push(tmp);
-        if(gunQueue.findPkt(rank) == NULL || 
-           compare(tmp,*gunQueue.findPkt(rank))){
+        gunChannel.lock();
+        gunChannel.qpush(tmp);
+        // gunChannel.dump();
+        if(gunChannel.qcountFrom(rank) == 0 || 
+           compare(tmp,*gunChannel.qgetFrom(rank))){
+          gunChannel.unlock();
           sendPacket(&tmp, tmp.src, GUN_ACK);
           break;
         }
+        gunChannel.unlock();
         sendPacket(&tmp,tmp.src, GUN_NACK);
         break;
       }
       case GUN_ACK: {
-        gunCounter.incrACK();
+        gunChannel.lock();
+        gunChannel.rpush(tmp);
+        // gunChannel.dump();
+        gunChannel.unlock();
         break;
       }
       case GUN_NACK: {
-        gunCounter.incrNACK(tmp.src);
+        gunChannel.lock();
+        gunChannel.rpush(tmp);
+        // gunChannel.dump();
+        gunChannel.unlock();
         break;
       }
       case RELEASE : {
-        gunCounter.convert(tmp.src);
-        gunQueue.remove(tmp.src);
+        gunChannel.lock();
+        gunChannel.rconvert(tmp.src);
+        gunChannel.qremove(tmp.src);
+        // gunChannel.dump();
+        gunChannel.unlock();
 		    break;
       }
       case ROLL : {
@@ -91,31 +108,35 @@ void* CommThread::start(void* ptr){
         break;
       }
       case END : {
-        currentState.lock();
     		switch(tmp.value){
     			case 0: {
-    				if(currentState >= WAIT_END){
-    					//TODO: reinitialize variables for next cycle
+    				if(currentState < WAIT_END){
+    					// debug("nie skończyłem jeszcze");
+    					tmp.value = -1;
+        			sendPacket(&tmp, highestPriorityID, END);
+        			std::ostringstream os;
+        			os << "bcs state: " << toString(currentState);
+        			debug("%s",os.str().c_str())
+      				break;
+    				}
+    				// initialize variables
+  				  init();
 
-    					// if you're the initiator
-    					if(highestPriorityID == rank){
-    						tmp.value = 1;
-    						// debug("wykryto koniec cyklu; rozsyłam wieść o tym");
-    						sendPacket(&tmp,(rank+1)%size, END);
-    						break;
-    					} 
-      				// debug("przesyłam END dalej");
-      				sendPacket(&tmp,(rank+1)%size, END);
-    					break;
-    				} 
-  					// debug("nie skończyłem jeszcze");
-  					tmp.value = -1;
-      			sendPacket(&tmp, highestPriorityID, END);
-    				break;
-    			}
+  					// if I'm the initiator
+  					if(highestPriorityID == rank){
+  						tmp.value = 1;
+  						// debug("wykryto koniec cyklu; rozsyłam wieść o tym");
+  						sendPacket(&tmp,(rank+1)%size, END);
+  						break;
+  					} 
+    				// debug("przesyłam END dalej");
+    				sendPacket(&tmp,(rank+1)%size, END);
+  					break;
+  				} 
     			case -1: {
     				// debug("ktoś jeszcze nie skończył, wznawiam sprawdzanie zakończenia")
-    				usleep(100);
+    				// usleep(100);
+    				sleep(1);
     				tmp.value = 0;
     				sendPacket(&tmp, (rank+1)%size, END);
     				break;
@@ -123,34 +144,32 @@ void* CommThread::start(void* ptr){
     			default: {
     				// debug("otrzymałem wieść o skończeniu cyklu")
     				if(tmp.value < size){
-    					// debug("przesyłam dalej")
+    					debug("przesyłam dalej")
     					tmp.value++;
     					sendPacket(&tmp, (rank+1)%size, END);
     				}
     				//TODO: start participating in next cycle
+    				currentState.changeState(FINISHED);
+    				break;
     			}
     		}
-        currentState.unlock();
         break;
       }
   	  case SCORE: {
-        currentState.lock();
-    		if(tmp.value == size){
+    		if(tmp.value == size-1){
     		  std::ostringstream os;
-    		  os << "Koniec rundy. Wygrał proces ID " << tmp.topId << " z wynikiem " << tmp.topScore << ".";
+    		  os << "Koniec gry. Wygrał proces ID " << tmp.topId << " z wynikiem " << tmp.topScore << ".";
     		  println("%s",os.str().c_str());
-    		} 
-    		else {
-    			if(winAmount > tmp.topScore){
-    				tmp.topScore = winAmount;
-    				tmp.topId = rank;
-    			}
-    			if(currentState < WAIT_END) tmp.value = 0;
-    			else tmp.value++;
-        	sendPacket(&tmp,(rank+1)%size, SCORE);
+    		  break;
     		}
-  		currentState.unlock();
-  		break;
+  			if(winAmount > tmp.topScore){
+  				tmp.topScore = winAmount;
+  				tmp.topId = rank;
+  			}
+  			if(currentState < WAIT_END) tmp.value = 0;
+  			else tmp.value++;
+      	sendPacket(&tmp,(rank+1)%size, SCORE);
+    		break;
   	  }
     }
   }
