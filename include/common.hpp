@@ -298,7 +298,7 @@ public:
       std::remove_if(
         data.begin(),
         data.end(),
-        [src](const packet_t pkt){
+        [src](const packet_t& pkt){
           return pkt.src==src;
         }
       ),

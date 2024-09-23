@@ -74,17 +74,13 @@ void* CommThread::start(void* ptr){
         break;
       }
       case GUN_ACK: {
-        gunChannel.lock();
         gunChannel.rpush(tmp);
         // gunChannel.dump();
-        gunChannel.unlock();
         break;
       }
       case GUN_NACK: {
-        gunChannel.lock();
         gunChannel.rpush(tmp);
         // gunChannel.dump();
-        gunChannel.unlock();
         break;
       }
       case RELEASE : {
@@ -135,8 +131,8 @@ void* CommThread::start(void* ptr){
   				} 
     			case -1: {
     				// debug("ktoś jeszcze nie skończył, wznawiam sprawdzanie zakończenia")
-    				// usleep(100);
-    				sleep(1);
+    				usleep(100);
+    				// sleep(1);
     				tmp.value = 0;
     				sendPacket(&tmp, (rank+1)%size, END);
     				break;
