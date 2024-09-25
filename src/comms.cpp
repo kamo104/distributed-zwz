@@ -103,6 +103,17 @@ void* CommThread::start(void* ptr){
     			sendPacket(&tmp, tmp.src, ROLL);
     		}
     		if(rollVal < pairRollVal) winAmount++;
+			// give back the gun
+			gunChannel.lock();
+			clk.lock();
+			for(int i=0;i<roleChannel.queue().size()/2;i++){
+				if(roleChannel.queue()[i].src==rank) continue;
+				sendPacket(&tmp, roleChannel.queue()[i].src, RELEASE, false);
+			}
+			clk++;
+			clk.unlock();
+			gunChannel.qremove(rank);
+			gunChannel.unlock();
     		currentState.changeState(WAIT_END);
   			// TODO: move to end cycle barrier
         break;

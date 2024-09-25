@@ -114,17 +114,7 @@ void mainLoop(){
 				rollVal = random()%INT32_MAX;
 				tmp.value = rollVal;
 				sendPacket(&tmp, currPair, ROLL);
-				gunChannel.lock();
-				// give back the gun
-				clk.lock();
-				for(int i=0;i<roleChannel.queue().size()/2;i++){
-					if(roleChannel.queue()[i].src==rank) continue;
-					sendPacket(&tmp, roleChannel.queue()[i].src, RELEASE, false);
-				}
-				clk++;
-				clk.unlock();
-				gunChannel.qremove(rank);
-				gunChannel.unlock();
+
 				currentState.await();
 
 				break;
