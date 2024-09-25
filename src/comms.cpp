@@ -106,9 +106,9 @@ void* CommThread::start(void* ptr){
 			// give back the gun
 			gunChannel.lock();
 			clk.lock();
-			for(int i=0;i<roleChannel.queue().size()/2;i++){
-				if(roleChannel.queue()[i].src==rank) continue;
-				sendPacket(&tmp, roleChannel.queue()[i].src, RELEASE, false);
+			for(int i=0;i<gunChannel.queue().size();i++){
+				if(gunChannel.queue()[i].src==rank) continue;
+				sendPacket(&tmp, gunChannel.queue()[i].src, RELEASE, false);
 			}
 			clk++;
 			clk.unlock();
