@@ -36,10 +36,14 @@ void mainLoop(){
 			  currentState.changeState(WAIT_ROLE);
 			  // debug("ubiegam się o dostęp do sekcji krytycznej zabójców");
 			  clk.lock();
-			  for(int dst : std::ranges::iota_view(0,size)){
-			  	if(dst==rank) continue;
-			  	sendPacket(&tmp, dst, ROLE, false);
+			  for(int i=0;i<size;i++){
+			  	if(i==rank) continue;
+			  	sendPacket(&tmp, i, ROLE, false);
 			  }
+			  // for(int dst : std::ranges::iota_view(0,size)){
+			  // 	if(dst==rank) continue;
+			  // 	sendPacket(&tmp, dst, ROLE, false);
+			  // }
 			  roleChannel.qpush(tmp);
 			  clk++;
 			  clk.unlock();
