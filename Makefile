@@ -17,4 +17,4 @@ clean:
 
 # mpiexec ??
 run: main
-	mpirun -oversubscribe -np 2 -oversubscribe ./main -g 1 -c 3
+	mpirun -oversubscribe -np 4 ./main -g 2 -c 2 | tee out.log

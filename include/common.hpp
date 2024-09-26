@@ -209,9 +209,10 @@ public:
     return;
   }
 
-  void await(){
+  void await(int n_unlock=0){
     lock();
     StateType oldState = data;
+  	for(int i=0;i<n_unlock;i++) unlock();
     while(oldState==data) wait();
     unlock();
   }
@@ -387,16 +388,18 @@ public:
     return std::distance(resp.begin(),it);
   }
 
-  void awaitRole(){
+  void awaitRole(int n_unlock=0){
     lock();
+  	for(int i=0;i<n_unlock;i++) unlock();
   	while(
   	  countAck() + countNack() < size-1 || 
   	  data.size() < size) wait();
   	unlock();
   }
 
-  void awaitGun(){
+  void awaitGun(int n_unlock=0){
   	lock();
+  	for(int i=0;i<n_unlock;i++) unlock();
   	while(
   	  countAck() + countNack() < size/2-1 || 
   	  countNack() > allowedNack) wait();

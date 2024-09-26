@@ -8,7 +8,7 @@
 void* CommThread::start(void* ptr){
   packet_t tmp;
   MPI_Status status;
-  while(!endCondition()){
+  while(1){
     MPI_Recv(&tmp, sizeof(packet_t), MPI_BYTE, MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, &status);
   	// update Lamport Clock
   	clk.update(tmp.timestamp);

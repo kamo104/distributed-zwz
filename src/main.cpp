@@ -76,20 +76,22 @@ void mainLoop(){
 				debug("pairing: %s",oss.str().c_str())
 
 				// if I'm the killer send a pair req
-				if(myId<pairId){
-					sendPacket(NULL, currPair, PAIR);
-				}
 				currentState.changeState(WAIT_PAIR);
 				break;
 			}
 			case WAIT_PAIR : {
 				// wait untill we get a PAIR_ACK
-				currentState.await();
+				currentState.lock();
+				if(myId<pairId){
+					sendPacket(NULL, currPair, PAIR);
+				}
+				currentState.await(1);
 				break;
 			}
 			case WAIT_GUN: {
 				// send gun requests
 				roleChannel.lock();
+				gunChannel.lock();
 				clk.lock();
 				for(int i=0;i<roleChannel.queue().size()/2;i++){
 					if(roleChannel.queue()[i].src==rank) continue;
@@ -101,7 +103,7 @@ void mainLoop(){
 				roleChannel.unlock();
 
 				// wait untill we get a gun
-				gunChannel.awaitGun();
+				gunChannel.awaitGun(1);
 				currentState.changeState(ROLLING);
 				break;
 			}
