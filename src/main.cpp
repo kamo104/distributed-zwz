@@ -5,7 +5,6 @@
 #include <string>
 #include <util.hpp>
 #include <chrono>
-#include <ranges>
 
 /* global variables */
 // out stats
